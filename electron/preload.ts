@@ -8,6 +8,8 @@ import {
   type IpcResult,
   type LogEntry,
   type ReadTextFileOutput,
+  type SelectTextFileInput,
+  type SelectTextFileOutput,
   type RestoreBackupOutput,
   type WriteTextFileOutput,
 } from "../src/shared/ipc.js";
@@ -40,6 +42,17 @@ const api: ShellManagerApi = {
       ...input,
       targetPath,
     })) as IpcResult<ApplyConfigOutput>;
+    return unwrapIpcResult(result);
+  },
+  async selectTextFile(input = {}) {
+    const payload: SelectTextFileInput = {};
+    if ("defaultPath" in input && input.defaultPath !== undefined) {
+      payload.defaultPath = assertNonEmptyString(input.defaultPath, "defaultPath");
+    }
+    const result = (await ipcRenderer.invoke(
+      IPC_CHANNELS.FILE_SELECT_TEXT,
+      payload,
+    )) as IpcResult<SelectTextFileOutput | null>;
     return unwrapIpcResult(result);
   },
   async readTextFile(input) {

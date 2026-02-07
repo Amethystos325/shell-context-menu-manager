@@ -3,6 +3,7 @@ import type { ErrorCode } from "./error-codes.js";
 export const IPC_CHANNELS = {
   APP_GET_INFO: "app:get-info",
   APP_APPLY_CONFIG: "app:apply-config",
+  FILE_SELECT_TEXT: "file:select-text",
   FILE_READ_TEXT: "file:read-text",
   FILE_WRITE_TEXT: "file:write-text",
   BACKUP_LIST: "backup:list",
@@ -28,6 +29,14 @@ export interface ReadTextFileInput {
 export interface ReadTextFileOutput {
   path: string;
   content: string;
+}
+
+export interface SelectTextFileInput {
+  defaultPath?: string;
+}
+
+export interface SelectTextFileOutput {
+  path: string;
 }
 
 export interface WriteTextFileInput {

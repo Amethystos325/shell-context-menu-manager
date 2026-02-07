@@ -3,7 +3,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { BackupService } from "./backup-service.js";
 import { Logger } from "./logger.js";
 import { AppError, ERROR_CODES, type ErrorCode } from "../src/shared/error-codes.js";
@@ -18,6 +18,8 @@ import {
   type ListBackupsOutput,
   type ReadTextFileInput,
   type ReadTextFileOutput,
+  type SelectTextFileInput,
+  type SelectTextFileOutput,
   type RestoreBackupInput,
   type RestoreBackupOutput,
   type WriteTextFileInput,
@@ -276,6 +278,38 @@ function registerIpcHandlers(): void {
     logger?.log("info", "App info requested by renderer.");
     return ok(info);
   });
+
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_SELECT_TEXT,
+    async (_, input: SelectTextFileInput): Promise<IpcResult<SelectTextFileOutput | null>> => {
+      try {
+        assertObject(input);
+        const defaultPath = typeof input.defaultPath === "string" ? input.defaultPath.trim() : "";
+        const selected = await dialog.showOpenDialog({
+          title: "Select shell config file",
+          defaultPath: defaultPath || undefined,
+          properties: ["openFile"],
+          filters: [
+            { name: "NSS Config", extensions: ["nss"] },
+            { name: "Text Files", extensions: ["txt"] },
+            { name: "All Files", extensions: ["*"] },
+          ],
+        });
+
+        if (selected.canceled || selected.filePaths.length === 0) {
+          return ok(null);
+        }
+
+        const filePath = path.normalize(selected.filePaths[0]);
+        logger?.log("info", `Select file succeeded: ${filePath}`);
+        return ok({ path: filePath });
+      } catch (error) {
+        const ipcError = toIpcError(error, ERROR_CODES.READ_FAIL);
+        logger?.log("error", `Select file failed: ${ipcError.code} ${ipcError.message}`);
+        return fail(ipcError);
+      }
+    },
+  );
 
   ipcMain.handle(
     IPC_CHANNELS.FILE_READ_TEXT,

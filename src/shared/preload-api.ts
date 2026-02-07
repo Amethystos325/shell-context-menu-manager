@@ -6,6 +6,8 @@ import type {
   LogEntry,
   ReadTextFileInput,
   ReadTextFileOutput,
+  SelectTextFileInput,
+  SelectTextFileOutput,
   RestoreBackupInput,
   RestoreBackupOutput,
   ListBackupsInput,
@@ -16,6 +18,7 @@ import type {
 export interface ShellManagerApi {
   getAppInfo: () => Promise<AppInfo>;
   applyConfig: (input: ApplyConfigInput) => Promise<ApplyConfigOutput>;
+  selectTextFile: (input?: SelectTextFileInput) => Promise<SelectTextFileOutput | null>;
   readTextFile: (input: ReadTextFileInput) => Promise<ReadTextFileOutput>;
   writeTextFile: (input: WriteTextFileInput) => Promise<WriteTextFileOutput>;
   listBackups: (input: ListBackupsInput) => Promise<BackupEntry[]>;

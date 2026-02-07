@@ -397,7 +397,13 @@ function App() {
     }
     setBusy(true);
     try {
-      const data = await api.readTextFile({ path: filePath });
+      const selected = await api.selectTextFile({ defaultPath: filePath || undefined });
+      if (!selected) {
+        setStatus(t("status.fileSelectionCanceled"));
+        return;
+      }
+      setFilePath(selected.path);
+      const data = await api.readTextFile({ path: selected.path });
       applySource(data.content, true);
       await refreshBackups(data.path);
       setStatus(t("status.loaded", { path: data.path }));
@@ -644,12 +650,12 @@ function App() {
           id="file-path"
           type="text"
           value={filePath}
-          onChange={(event) => setFilePath(event.target.value)}
+          readOnly
           placeholder={t("placeholder.configFilePath")}
         />
         <div className="actions">
-          <button type="button" onClick={handleRead} disabled={busy || isPathEmpty}>
-            {t("action.read")}
+          <button type="button" onClick={handleRead} disabled={busy}>
+            {t("action.selectAndRead")}
           </button>
           <button type="button" onClick={handlePrepareSave} disabled={busy || isPathEmpty}>
             {t("action.save")}
