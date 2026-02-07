@@ -32,6 +32,16 @@ import {
   type MessageKey,
   type TranslationParams,
 } from "./i18n.js";
+import {
+  buildRuntimePreview,
+  DEFAULT_RUNTIME_PREVIEW_CONTEXT,
+  getDefaultSelectionName,
+  getRecommendedSelectionCount,
+  type PreviewLocationType,
+  type RuntimePreviewContext,
+  type RuntimePreviewEntry,
+} from "./preview/runtime-preview.js";
+import { getMockShellManagerApi, isMockPreloadApiEnabled } from "./mock/mock-shell-manager-api.js";
 import type { ShellManagerApi } from "./shared/preload-api.js";
 import type { BackupEntry, LogEntry } from "./shared/ipc.js";
 import "./App.css";
@@ -194,6 +204,221 @@ function TreeView({ nodes, selectedId, onSelect, onDropNode, modelLocked, t }: T
   );
 }
 
+interface PreviewTreeProps {
+  entries: RuntimePreviewEntry[];
+  emptyText: string;
+  systemTagText: string;
+  shellTagText: string;
+  collapsedIds: ReadonlySet<string>;
+  onToggleMenu: (menuId: string) => void;
+  expandLabel: string;
+  collapseLabel: string;
+  depth?: number;
+}
+
+function PreviewTree({
+  entries,
+  emptyText,
+  systemTagText,
+  shellTagText,
+  collapsedIds,
+  onToggleMenu,
+  expandLabel,
+  collapseLabel,
+  depth = 0,
+}: PreviewTreeProps) {
+  if (entries.length === 0) {
+    return <p className="empty-tip">{emptyText}</p>;
+  }
+
+  return (
+    <ul className={depth === 0 ? "preview-tree preview-tree-root" : "preview-tree preview-tree-nested"}>
+      {entries.map((entry) => (
+        <li key={entry.id}>
+          <p
+            className={`preview-entry source-${entry.source}${entry.labelOnly ? " label-only" : ""}`}
+          >
+            {entry.kind === "menu" ? (
+              <button
+                type="button"
+                className="preview-toggle"
+                onClick={() => onToggleMenu(entry.id)}
+                title={collapsedIds.has(entry.id) ? expandLabel : collapseLabel}
+              >
+                {collapsedIds.has(entry.id) ? ">" : "v"}
+              </button>
+            ) : (
+              <span className="preview-toggle-spacer" />
+            )}
+            <span className={`preview-source-badge source-${entry.source}`}>
+              {entry.source === "system" ? systemTagText : shellTagText}
+            </span>
+            {entry.kind === "separator"
+              ? "----------"
+              : entry.kind === "menu"
+                ? `[Menu] ${entry.title}`
+                : entry.title}
+          </p>
+          {entry.kind === "menu" &&
+          entry.children &&
+          entry.children.length > 0 &&
+          !collapsedIds.has(entry.id) ? (
+            <PreviewTree
+              entries={entry.children}
+              emptyText={emptyText}
+              systemTagText={systemTagText}
+              shellTagText={shellTagText}
+              collapsedIds={collapsedIds}
+              onToggleMenu={onToggleMenu}
+              expandLabel={expandLabel}
+              collapseLabel={collapseLabel}
+              depth={depth + 1}
+            />
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function collectPreviewMenuIds(entries: RuntimePreviewEntry[]): string[] {
+  const ids: string[] = [];
+  const stack = [...entries];
+  while (stack.length > 0) {
+    const entry = stack.shift();
+    if (!entry) {
+      continue;
+    }
+    if (entry.kind === "menu") {
+      ids.push(entry.id);
+      if (entry.children && entry.children.length > 0) {
+        stack.push(...entry.children);
+      }
+    }
+  }
+  return ids;
+}
+
+function toWindowsPathKey(filePath: string): string {
+  return filePath.replaceAll("/", "\\").toLowerCase();
+}
+
+function getWindowsDirname(filePath: string): string {
+  const normalized = filePath.replaceAll("/", "\\");
+  const index = normalized.lastIndexOf("\\");
+  if (index < 0) {
+    return normalized;
+  }
+  return normalized.slice(0, index);
+}
+
+function isAbsoluteWindowsPath(filePath: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(filePath) || filePath.startsWith("\\\\");
+}
+
+function normalizeWindowsPath(filePath: string): string {
+  const normalized = filePath.replaceAll("/", "\\");
+  if (!normalized) {
+    return normalized;
+  }
+
+  let prefix = "";
+  let rest = normalized;
+
+  if (/^[a-zA-Z]:\\/.test(rest)) {
+    prefix = rest.slice(0, 2);
+    rest = rest.slice(2);
+  } else if (rest.startsWith("\\\\")) {
+    prefix = "\\\\";
+    rest = rest.slice(2);
+  }
+
+  const parts = rest.split("\\");
+  const stack: string[] = [];
+  for (const part of parts) {
+    if (!part || part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      if (stack.length > 0) {
+        stack.pop();
+      }
+      continue;
+    }
+    stack.push(part);
+  }
+
+  if (prefix === "\\\\") {
+    return `\\\\${stack.join("\\")}`;
+  }
+  if (prefix) {
+    return `${prefix}\\${stack.join("\\")}`;
+  }
+  return stack.join("\\");
+}
+
+function resolveImportFilePath(currentFilePath: string, importPath: string): string {
+  const normalizedImport = importPath.trim();
+  if (!normalizedImport) {
+    return "";
+  }
+  if (isAbsoluteWindowsPath(normalizedImport)) {
+    return normalizeWindowsPath(normalizedImport);
+  }
+  const baseDir = getWindowsDirname(currentFilePath);
+  return normalizeWindowsPath(`${baseDir}\\${normalizedImport}`);
+}
+
+async function resolveDocumentWithImports(
+  document: ConfigDocument,
+  currentFilePath: string,
+  api: ShellManagerApi,
+): Promise<ConfigDocument> {
+  const visited = new Set<string>([toWindowsPathKey(normalizeWindowsPath(currentFilePath))]);
+
+  const expandNodes = async (nodes: ConfigNode[], hostFilePath: string): Promise<ConfigNode[]> => {
+    const output: ConfigNode[] = [];
+    for (const node of nodes) {
+      if (node.kind === "menu") {
+        const children = await expandNodes(node.children, hostFilePath);
+        output.push({ ...node, children });
+        continue;
+      }
+
+      if (node.kind !== "import") {
+        output.push(node);
+        continue;
+      }
+
+      const importFilePath = resolveImportFilePath(hostFilePath, node.path);
+      if (!importFilePath) {
+        continue;
+      }
+      const importKey = toWindowsPathKey(importFilePath);
+      if (visited.has(importKey)) {
+        continue;
+      }
+      visited.add(importKey);
+
+      try {
+        const imported = await api.readTextFile({ path: importFilePath, createIfMissing: false });
+        const parsed = parseAndValidate(imported.content);
+        if (!parsed.document) {
+          continue;
+        }
+        const nested = await expandNodes(parsed.document.nodes, importFilePath);
+        output.push(...nested);
+      } catch {
+        // Ignore missing/invalid import files in preview to keep the main editor responsive.
+      }
+    }
+    return output;
+  };
+
+  const expanded = await expandNodes(document.nodes, currentFilePath);
+  return { nodes: expanded };
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(() => getInitialLanguage());
   const t = useCallback(
@@ -204,13 +429,20 @@ function App() {
     (error: unknown) => formatErrorMessage(error, t("error.unknown")),
     [t],
   );
+  const [usingMockApi, setUsingMockApi] = useState(false);
   const getShellManagerApi = useCallback((): ShellManagerApi | null => {
     const api = window.shellManager;
-    if (!api) {
-      setStatus(t("status.preloadApiUnavailable"));
-      return null;
+    if (api) {
+      setUsingMockApi(false);
+      return api;
     }
-    return api;
+    if (isMockPreloadApiEnabled()) {
+      setUsingMockApi(true);
+      return getMockShellManagerApi();
+    }
+    setUsingMockApi(false);
+    setStatus(t("status.preloadApiUnavailable"));
+    return null;
   }, [t]);
 
   const [appName, setAppName] = useState("Shell Context Menu Manager");
@@ -236,6 +468,12 @@ function App() {
   const [selectedBackupPath, setSelectedBackupPath] = useState("");
   const [backupPreviewText, setBackupPreviewText] = useState("");
   const [manualApplySteps, setManualApplySteps] = useState<string[]>([]);
+  const [previewDocument, setPreviewDocument] = useState<ConfigDocument | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [collapsedPreviewMenuIds, setCollapsedPreviewMenuIds] = useState<Set<string>>(new Set());
+  const [previewContext, setPreviewContext] = useState<RuntimePreviewContext>(
+    DEFAULT_RUNTIME_PREVIEW_CONTEXT,
+  );
 
   const selectedNode = useMemo(
     () => (documentModel && selectedId ? getNodeById(documentModel, selectedId) : undefined),
@@ -243,10 +481,51 @@ function App() {
   );
 
   const ruleNodes = useMemo(() => collectRuleNodes(documentModel), [documentModel]);
+  const runtimePreview = useMemo(
+    () => (previewDocument ? buildRuntimePreview(previewDocument, previewContext) : null),
+    [previewDocument, previewContext],
+  );
+  const previewMenuIds = useMemo(
+    () => (runtimePreview ? collectPreviewMenuIds(runtimePreview.combinedEntries) : []),
+    [runtimePreview],
+  );
   const dirty = sourceText !== lastSavedText;
   const isPathEmpty = filePath.trim().length === 0;
   const modelLocked = syncState === "error";
   const diffLines = useMemo(() => (diffPreview ? flattenDiff(diffPreview) : []), [diffPreview]);
+
+  const updatePreviewContext = (patch: Partial<RuntimePreviewContext>) => {
+    setPreviewContext((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handlePreviewLocationChange = (locationType: PreviewLocationType) => {
+    setPreviewContext((prev) => ({
+      ...prev,
+      locationType,
+      selectionName: getDefaultSelectionName(locationType),
+      selectionCount: getRecommendedSelectionCount(locationType),
+    }));
+  };
+
+  const handleTogglePreviewMenu = useCallback((menuId: string) => {
+    setCollapsedPreviewMenuIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(menuId)) {
+        next.delete(menuId);
+      } else {
+        next.add(menuId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExpandAllPreviewMenus = () => {
+    setCollapsedPreviewMenuIds(new Set());
+  };
+
+  const handleCollapseAllPreviewMenus = () => {
+    setCollapsedPreviewMenuIds(new Set(previewMenuIds));
+  };
 
   const refreshBackups = useCallback(
     async (targetPath: string) => {
@@ -306,6 +585,12 @@ function App() {
   }, [language]);
 
   useEffect(() => {
+    if (usingMockApi) {
+      setStatus(t("status.mockApiEnabled"));
+    }
+  }, [t, usingMockApi]);
+
+  useEffect(() => {
     const api = getShellManagerApi();
     if (!api) {
       return;
@@ -352,6 +637,68 @@ function App() {
     }
     void refreshBackups(filePath);
   }, [filePath, refreshBackups]);
+
+  useEffect(() => {
+    if (!documentModel) {
+      setPreviewDocument(null);
+      setPreviewLoading(false);
+      return;
+    }
+
+    const api = getShellManagerApi();
+    if (!api) {
+      setPreviewDocument(documentModel);
+      setPreviewLoading(false);
+      return;
+    }
+
+    if (!filePath.trim()) {
+      setPreviewDocument(documentModel);
+      setPreviewLoading(false);
+      return;
+    }
+
+    let disposed = false;
+    setPreviewLoading(true);
+    const run = async () => {
+      try {
+        const resolved = await resolveDocumentWithImports(documentModel, filePath, api);
+        if (!disposed) {
+          setPreviewDocument(resolved);
+        }
+      } catch {
+        if (!disposed) {
+          setPreviewDocument(documentModel);
+        }
+      } finally {
+        if (!disposed) {
+          setPreviewLoading(false);
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      disposed = true;
+    };
+  }, [documentModel, filePath, getShellManagerApi]);
+
+  useEffect(() => {
+    if (previewMenuIds.length === 0) {
+      setCollapsedPreviewMenuIds(new Set());
+      return;
+    }
+    const validIds = new Set(previewMenuIds);
+    setCollapsedPreviewMenuIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (validIds.has(id)) {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+  }, [previewMenuIds]);
 
   useEffect(() => {
     if (syncState !== "syncing") {
@@ -939,6 +1286,126 @@ function App() {
             )}
           </div>
         </section>
+      </section>
+
+      <section className="panel runtime-preview-panel">
+        <h2>{t("section.runtimePreview")}</h2>
+        <div className="preview-controls">
+          <label htmlFor="preview-location">{t("preview.location")}</label>
+          <select
+            id="preview-location"
+            value={previewContext.locationType}
+            onChange={(event) => handlePreviewLocationChange(event.target.value as PreviewLocationType)}
+          >
+            <option value="desktop">{t("preview.location.desktop")}</option>
+            <option value="file">{t("preview.location.file")}</option>
+            <option value="dir">{t("preview.location.dir")}</option>
+            <option value="drive">{t("preview.location.drive")}</option>
+            <option value="back">{t("preview.location.back")}</option>
+            <option value="taskbar">{t("preview.location.taskbar")}</option>
+          </select>
+
+          <label htmlFor="preview-selection-count">{t("preview.selectionCount")}</label>
+          <input
+            id="preview-selection-count"
+            type="number"
+            min={0}
+            max={64}
+            value={previewContext.selectionCount}
+            onChange={(event) =>
+              updatePreviewContext({
+                selectionCount: Number.parseInt(event.target.value || "0", 10) || 0,
+              })
+            }
+          />
+
+          <label htmlFor="preview-selection-name">{t("preview.selectionName")}</label>
+          <input
+            id="preview-selection-name"
+            value={previewContext.selectionName}
+            onChange={(event) => updatePreviewContext({ selectionName: event.target.value })}
+          />
+
+          <label className="preview-checkbox" htmlFor="preview-shift">
+            <input
+              id="preview-shift"
+              type="checkbox"
+              checked={previewContext.shiftKey}
+              onChange={(event) => updatePreviewContext({ shiftKey: event.target.checked })}
+            />
+            <span>{t("preview.shiftKey")}</span>
+          </label>
+
+          <label className="preview-checkbox" htmlFor="preview-left-button">
+            <input
+              id="preview-left-button"
+              type="checkbox"
+              checked={previewContext.leftButton}
+              onChange={(event) => updatePreviewContext({ leftButton: event.target.checked })}
+            />
+            <span>{t("preview.leftButton")}</span>
+          </label>
+
+          <label className="preview-checkbox" htmlFor="preview-has-admin">
+            <input
+              id="preview-has-admin"
+              type="checkbox"
+              checked={previewContext.hasAdmin}
+              onChange={(event) => updatePreviewContext({ hasAdmin: event.target.checked })}
+            />
+            <span>{t("preview.hasAdmin")}</span>
+          </label>
+        </div>
+
+        {runtimePreview ? (
+          <>
+            <p className="preview-summary">
+              {t("preview.ruleStats", {
+                active: runtimePreview.ruleStats.activeRules,
+                total: runtimePreview.ruleStats.totalRules,
+                removed: runtimePreview.ruleStats.removedItems,
+                modified: runtimePreview.ruleStats.modifiedItems,
+                uncertain: runtimePreview.ruleStats.uncertainRules,
+              })}
+            </p>
+            {previewLoading ? <p className="preview-summary">{t("preview.loadingImports")}</p> : null}
+            <section className="preview-final">
+              <h3>{t("preview.combinedMenu")}</h3>
+              <div className="preview-legend">
+                <span className="preview-source-badge source-system">{t("preview.legend.system")}</span>
+                <span className="preview-source-badge source-shell">{t("preview.legend.shell")}</span>
+              </div>
+              <div className="preview-actions">
+                <button type="button" onClick={handleExpandAllPreviewMenus} disabled={previewMenuIds.length === 0}>
+                  {t("preview.action.expandAll")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCollapseAllPreviewMenus}
+                  disabled={previewMenuIds.length === 0}
+                >
+                  {t("preview.action.collapseAll")}
+                </button>
+              </div>
+              <PreviewTree
+                entries={runtimePreview.combinedEntries}
+                emptyText={t("tip.previewNoItems")}
+                systemTagText={t("preview.legend.system")}
+                shellTagText={t("preview.legend.shell")}
+                collapsedIds={collapsedPreviewMenuIds}
+                onToggleMenu={handleTogglePreviewMenu}
+                expandLabel={t("preview.toggle.expand")}
+                collapseLabel={t("preview.toggle.collapse")}
+              />
+              {runtimePreview.shellEntries.length === 0 ? (
+                <p className="preview-hint">{t("tip.previewNoShellItemsInContext")}</p>
+              ) : null}
+            </section>
+            <p className="preview-hint">{t("tip.previewApproximate")}</p>
+          </>
+        ) : (
+          <p className="empty-tip">{t("tip.noPreviewDocument")}</p>
+        )}
       </section>
 
       <section className="release-grid">

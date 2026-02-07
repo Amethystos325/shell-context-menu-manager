@@ -24,6 +24,7 @@ export interface AppInfo {
 
 export interface ReadTextFileInput {
   path: string;
+  createIfMissing?: boolean;
 }
 
 export interface ReadTextFileOutput {
