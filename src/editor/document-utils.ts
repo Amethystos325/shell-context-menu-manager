@@ -2,6 +2,7 @@ import type { Attribute, ConfigDocument, ConfigNode, MenuNode } from "../core/in
 
 type EditableNode = Extract<ConfigNode, { attributes: Attribute[] }>;
 type DropPlacement = "before" | "after" | "inside";
+type AddableNodeKind = "menu" | "item" | "separator" | "modify" | "remove";
 
 interface NodeRef {
   node: ConfigNode;
@@ -73,7 +74,7 @@ function supportsAttributes(node: ConfigNode): node is EditableNode {
   return "attributes" in node;
 }
 
-function createDefaultAttributes(kind: ConfigNode["kind"]): Attribute[] {
+function createDefaultAttributes(kind: AddableNodeKind): Attribute[] {
   if (kind === "menu") {
     return [
       {
@@ -112,12 +113,13 @@ function createDefaultAttributes(kind: ConfigNode["kind"]): Attribute[] {
   return [];
 }
 
-function createNode(kind: ConfigNode["kind"]): ConfigNode {
+function createNode(kind: AddableNodeKind): ConfigNode {
   if (kind === "separator") {
     return {
       id: newId("separator"),
       kind: "separator",
       range: createRange(),
+      attributes: [],
     };
   }
 
@@ -281,7 +283,7 @@ export function getNodeByPath(document: ConfigDocument, path: number[] | null): 
 export function addNode(
   document: ConfigDocument,
   selectedNodeId: string | null,
-  kind: ConfigNode["kind"],
+  kind: AddableNodeKind,
 ): { document: ConfigDocument; selectedId: string } {
   const next = cloneDocument(document);
   const newNode = createNode(kind);

@@ -4,6 +4,7 @@ import type {
   ConfigDocument,
   ConfigNode,
   ImportNode,
+  RawNode,
   SourcePosition,
   SourceRange,
 } from "./types.js";
@@ -45,6 +46,12 @@ class Parser {
 
   private parseStatement(): ConfigNode {
     const start = this.getPosition();
+
+    if (this.peek() === "$" || this.peek() === "@") {
+      this.consumeToStatementEnd();
+      return this.createRawNode(start);
+    }
+
     const keyword = this.parseIdentifier("Expected statement keyword.");
 
     if (keyword === "import") {
@@ -60,7 +67,8 @@ class Parser {
     }
 
     if (keyword === "separator") {
-      return this.createNode(start, "separator", {});
+      const attributes = this.parseOptionalAttributes();
+      return this.createNode(start, "separator", { attributes });
     }
 
     if (keyword === "modify") {
@@ -71,28 +79,36 @@ class Parser {
       return this.parseFlatNode(start, "remove");
     }
 
-    throw this.errorAtPosition(`Unsupported statement keyword: ${keyword}`, start);
+    this.skipWhitespaceAndComments();
+    this.consumeToStatementEnd();
+    return this.createRawNode(start);
   }
 
   private parseImport(start: SourcePosition): ImportNode {
     this.skipWhitespaceAndComments();
-
     let path = "";
+    let section: string | undefined;
+
     if (this.peek() === '"' || this.peek() === "'") {
       const parsed = this.parseStringLiteral();
       path = parsed.value;
     } else {
-      const valueStart = this.index;
-      while (!this.isAtEnd() && this.peek() !== "\n" && this.peek() !== "\r" && this.peek() !== ";") {
-        this.advance();
-      }
-      path = this.text.slice(valueStart, this.index).trim();
-      if (!path) {
-        throw this.errorAtCurrent("Import path cannot be empty.");
+      const first = this.parseBareToken();
+      this.skipWhitespaceAndComments();
+      if (this.peek() === '"' || this.peek() === "'") {
+        section = first;
+        const parsed = this.parseStringLiteral();
+        path = parsed.value;
+      } else {
+        path = first;
       }
     }
 
-    return this.createNode(start, "import", { path });
+    if (!path.trim()) {
+      throw this.errorAtCurrent("Import path cannot be empty.");
+    }
+
+    return this.createNode(start, "import", { path, section });
   }
 
   private parseMenu(start: SourcePosition): ConfigNode {
@@ -150,7 +166,12 @@ class Parser {
       if (this.peek() === ",") {
         this.advance();
         this.skipWhitespaceAndComments();
-      } else if (this.peek() !== ")") {
+      } else if (this.peek() === ")") {
+        break;
+      } else if (this.isAttributeKeyStart(this.peek())) {
+        // Nilesoft Shell also supports space-separated attributes.
+        continue;
+      } else {
         throw this.errorAtCurrent("Expected ',' or ')' after attribute value.");
       }
     }
@@ -160,16 +181,16 @@ class Parser {
   }
 
   private parseAttributeValue(): AttributeValue {
-    if (this.peek() === '"' || this.peek() === "'") {
-      const parsed = this.parseStringLiteral();
+    const raw = this.parseRawExpression({ stopOnAttributeBoundary: true });
+    const parsedString = this.tryParseQuotedLiteral(raw);
+    if (parsedString) {
       return {
-        raw: parsed.raw,
+        raw,
         kind: "string",
-        value: parsed.value,
+        value: parsedString,
       };
     }
 
-    const raw = this.parseRawExpression();
     if (/^-?\d+(\.\d+)?$/.test(raw)) {
       return {
         raw,
@@ -201,7 +222,7 @@ class Parser {
     };
   }
 
-  private parseRawExpression(): string {
+  private parseRawExpression(options: { stopOnAttributeBoundary?: boolean } = {}): string {
     const start = this.getPosition();
     const valueStart = this.index;
     let quote: '"' | "'" | null = null;
@@ -286,6 +307,19 @@ class Parser {
         break;
       }
 
+      if (
+        options.stopOnAttributeBoundary &&
+        parenDepth === 0 &&
+        bracketDepth === 0 &&
+        braceDepth === 0 &&
+        /\s/.test(ch)
+      ) {
+        const boundaryIndex = this.findNextNonWhitespaceIndex(this.index);
+        if (this.isAttributeBoundaryAt(boundaryIndex)) {
+          break;
+        }
+      }
+
       this.advance();
     }
 
@@ -299,6 +333,100 @@ class Parser {
     }
 
     return raw;
+  }
+
+  private consumeToStatementEnd(): void {
+    let quote: '"' | "'" | null = null;
+    let escaped = false;
+    let parenDepth = 0;
+    let bracketDepth = 0;
+    let braceDepth = 0;
+
+    while (!this.isAtEnd()) {
+      const ch = this.peek();
+
+      if (quote) {
+        if (escaped) {
+          escaped = false;
+        } else if (ch === "\\") {
+          escaped = true;
+        } else if (ch === quote) {
+          quote = null;
+        }
+        this.advance();
+        continue;
+      }
+
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        this.advance();
+        continue;
+      }
+
+      if (ch === "(") {
+        parenDepth += 1;
+        this.advance();
+        continue;
+      }
+
+      if (ch === ")") {
+        if (parenDepth > 0) {
+          parenDepth -= 1;
+          this.advance();
+          continue;
+        }
+        if (bracketDepth === 0 && braceDepth === 0) {
+          break;
+        }
+        this.advance();
+        continue;
+      }
+
+      if (ch === "[") {
+        bracketDepth += 1;
+        this.advance();
+        continue;
+      }
+
+      if (ch === "]") {
+        if (bracketDepth > 0) {
+          bracketDepth -= 1;
+          this.advance();
+          continue;
+        }
+        break;
+      }
+
+      if (ch === "{") {
+        braceDepth += 1;
+        this.advance();
+        continue;
+      }
+
+      if (ch === "}") {
+        if (braceDepth > 0) {
+          braceDepth -= 1;
+          this.advance();
+          continue;
+        }
+        if (parenDepth === 0 && bracketDepth === 0) {
+          break;
+        }
+        this.advance();
+        continue;
+      }
+
+      if (ch === ";" && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+        this.advance();
+        break;
+      }
+
+      if ((ch === "\n" || ch === "\r") && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+        break;
+      }
+
+      this.advance();
+    }
   }
 
   private parseStringLiteral(): { raw: string; value: string } {
@@ -353,6 +481,98 @@ class Parser {
     }
 
     return this.text.slice(start, this.index);
+  }
+
+  private parseBareToken(): string {
+    const start = this.index;
+    while (!this.isAtEnd()) {
+      const ch = this.peek();
+      if (/\s/.test(ch) || ch === ";" || ch === "\n" || ch === "\r") {
+        break;
+      }
+      this.advance();
+    }
+
+    const token = this.text.slice(start, this.index).trim();
+    if (!token) {
+      throw this.errorAtCurrent("Expected token.");
+    }
+    return token;
+  }
+
+  private tryParseQuotedLiteral(raw: string): string | null {
+    const trimmed = raw.trim();
+    if (trimmed.length < 2) {
+      return null;
+    }
+
+    const quote = trimmed[0];
+    if ((quote !== '"' && quote !== "'") || trimmed[trimmed.length - 1] !== quote) {
+      return null;
+    }
+
+    try {
+      return this.decodeString(trimmed, quote);
+    } catch {
+      return null;
+    }
+  }
+
+  private isAttributeKeyStart(ch: string): boolean {
+    return /[A-Za-z_@]/.test(ch);
+  }
+
+  private findNextNonWhitespaceIndex(fromIndex: number): number {
+    let cursor = fromIndex;
+    while (cursor < this.text.length) {
+      const ch = this.text[cursor];
+      const next = this.text[cursor + 1] ?? "";
+
+      if (/\s/.test(ch)) {
+        cursor += 1;
+        continue;
+      }
+
+      if (ch === "/" && next === "/") {
+        cursor += 2;
+        while (cursor < this.text.length && this.text[cursor] !== "\n") {
+          cursor += 1;
+        }
+        continue;
+      }
+
+      if (ch === "/" && next === "*") {
+        cursor += 2;
+        while (cursor < this.text.length && !(this.text[cursor] === "*" && this.text[cursor + 1] === "/")) {
+          cursor += 1;
+        }
+        cursor += 2;
+        continue;
+      }
+
+      break;
+    }
+
+    return cursor;
+  }
+
+  private isAttributeBoundaryAt(index: number): boolean {
+    if (index >= this.text.length) {
+      return false;
+    }
+
+    const first = this.text[index];
+    if (!this.isAttributeKeyStart(first)) {
+      return false;
+    }
+
+    let cursor = index + 1;
+    while (cursor < this.text.length && /[A-Za-z0-9_.@-]/.test(this.text[cursor])) {
+      cursor += 1;
+    }
+
+    cursor = this.findNextNonWhitespaceIndex(cursor);
+    return this.text[cursor] === "=";
   }
 
   private skipTrailingSeparators(): void {
@@ -418,6 +638,13 @@ class Parser {
     };
 
     return node as unknown as Extract<ConfigNode, { kind: TKind }>;
+  }
+
+  private createRawNode(start: SourcePosition): RawNode {
+    const text = this.text.slice(start.offset, this.index).trim();
+    return this.createNode(start, "raw", {
+      text,
+    });
   }
 
   private createRange(start: SourcePosition, end: SourcePosition): SourceRange {

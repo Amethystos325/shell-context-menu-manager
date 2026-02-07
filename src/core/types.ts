@@ -4,7 +4,8 @@ export type NodeKind =
   | "item"
   | "separator"
   | "modify"
-  | "remove";
+  | "remove"
+  | "raw";
 
 export interface SourcePosition {
   offset: number;
@@ -40,6 +41,7 @@ export interface BaseNode {
 export interface ImportNode extends BaseNode {
   kind: "import";
   path: string;
+  section?: string;
 }
 
 export interface MenuNode extends BaseNode {
@@ -55,6 +57,7 @@ export interface ItemNode extends BaseNode {
 
 export interface SeparatorNode extends BaseNode {
   kind: "separator";
+  attributes: Attribute[];
 }
 
 export interface ModifyNode extends BaseNode {
@@ -67,7 +70,19 @@ export interface RemoveNode extends BaseNode {
   attributes: Attribute[];
 }
 
-export type ConfigNode = ImportNode | MenuNode | ItemNode | SeparatorNode | ModifyNode | RemoveNode;
+export interface RawNode extends BaseNode {
+  kind: "raw";
+  text: string;
+}
+
+export type ConfigNode =
+  | ImportNode
+  | MenuNode
+  | ItemNode
+  | SeparatorNode
+  | ModifyNode
+  | RemoveNode
+  | RawNode;
 
 export interface ConfigDocument {
   nodes: ConfigNode[];

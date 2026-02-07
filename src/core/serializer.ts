@@ -5,6 +5,7 @@ import type {
   ConfigNode,
   ImportNode,
   MenuNode,
+  RawNode,
 } from "./types.js";
 
 export interface SerializeOptions {
@@ -13,6 +14,9 @@ export interface SerializeOptions {
 }
 
 function serializeImport(node: ImportNode): string {
+  if (node.section && node.section.trim()) {
+    return `import ${node.section.trim()} ${JSON.stringify(node.path)}`;
+  }
   return `import ${JSON.stringify(node.path)}`;
 }
 
@@ -48,6 +52,17 @@ function serializeMenu(node: MenuNode, indent: string, level: number): string {
   return `${head}\n${children}\n${prefix}}`;
 }
 
+function serializeRaw(node: RawNode, indent: string, level: number): string {
+  const prefix = indent.repeat(level);
+  if (!node.text.includes("\n")) {
+    return `${prefix}${node.text}`;
+  }
+  return node.text
+    .split(/\r?\n/)
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
+}
+
 function serializeNode(node: ConfigNode, indent: string, level: number): string {
   const prefix = indent.repeat(level);
   if (node.kind === "import") {
@@ -59,7 +74,14 @@ function serializeNode(node: ConfigNode, indent: string, level: number): string 
   }
 
   if (node.kind === "separator") {
-    return `${prefix}separator`;
+    if (node.attributes.length === 0) {
+      return `${prefix}separator`;
+    }
+    return `${prefix}separator${serializeAttributes(node.attributes)}`;
+  }
+
+  if (node.kind === "raw") {
+    return serializeRaw(node, indent, level);
   }
 
   return `${prefix}${node.kind}${serializeAttributes(node.attributes)}`;

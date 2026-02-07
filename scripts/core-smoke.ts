@@ -9,11 +9,26 @@ function normalizeNode(node: ConfigNode): unknown {
     return {
       kind: node.kind,
       path: node.path,
+      section: node.section ?? null,
     };
   }
 
   if (node.kind === "separator") {
-    return { kind: node.kind };
+    return {
+      kind: node.kind,
+      attributes: node.attributes.map((attr) => ({
+        key: attr.key,
+        kind: attr.value.kind,
+        value: attr.value.value,
+      })),
+    };
+  }
+
+  if (node.kind === "raw") {
+    return {
+      kind: node.kind,
+      text: node.text,
+    };
   }
 
   if (node.kind === "menu") {
@@ -95,11 +110,11 @@ async function run(): Promise<void> {
   const parseFailure = parseAndValidate('item(title="Bad", cmd="x"');
   assert.ok(parseFailure.parseIssues.length > 0, "Expected parse issue for invalid syntax sample.");
 
-  const validationFailure = parseAndValidate('item(title="Missing cmd")');
+  const validationFailure = parseAndValidate("modify()");
   assert.equal(validationFailure.parseIssues.length, 0, "Unexpected parse issue for validation sample.");
   assert.ok(
-    validationFailure.validationIssues.some((issue) => issue.code === "E_REQUIRED"),
-    "Expected required-field validation issue.",
+    validationFailure.validationIssues.some((issue) => issue.code === "W_SELECTOR_MISSING"),
+    "Expected selector validation issue.",
   );
 
   console.log(`core-smoke: OK (${sampleFiles.length} samples validated)`);

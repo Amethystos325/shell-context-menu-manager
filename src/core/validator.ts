@@ -6,22 +6,52 @@ import type {
   ValidationIssue,
 } from "./types.js";
 
-const TYPE_ALLOWED = new Set([
+type AttributedNode = Extract<ConfigNode, { attributes: Attribute[] }>;
+
+const KNOWN_TYPE_TOKENS = new Set([
+  "*",
+  "all",
   "file",
   "files",
   "dir",
   "dirs",
   "folder",
-  "desktop",
   "background",
   "drive",
-  "*",
+  "desktop",
+  "taskbar",
+  "namespace",
+  "back",
+  "back.file",
+  "back.dir",
+  "dir.back",
+  "drive.back",
+  "recyclebin",
+  "this",
+  "window",
 ]);
 
-const MODE_ALLOWED = new Set(["single", "multiple", "none", "normal", "all"]);
+const KNOWN_MODE_TOKENS = new Set([
+  "none",
+  "single",
+  "multiple",
+  "multi_single",
+  "multi_unique",
+  "normal",
+  "all",
+]);
 
-function getAttribute(node: Extract<ConfigNode, { attributes: Attribute[] }>, key: string): Attribute | undefined {
-  return node.attributes.find((attr) => attr.key === key);
+function normalizeKey(key: string): string {
+  return key.trim().toLowerCase();
+}
+
+function getAttribute(node: AttributedNode, key: string): Attribute | undefined {
+  const normalized = normalizeKey(key);
+  return node.attributes.find((attr) => normalizeKey(attr.key) === normalized);
+}
+
+function hasAttribute(node: AttributedNode, key: string): boolean {
+  return Boolean(getAttribute(node, key));
 }
 
 function decodeAttributeAsString(attribute: Attribute | undefined): string | undefined {
@@ -52,53 +82,114 @@ function pushIssue(
   });
 }
 
-function validateItem(node: Extract<ConfigNode, { kind: "item" }>, issues: ValidationIssue[]): void {
-  const title = decodeAttributeAsString(getAttribute(node, "title"));
-  const cmd = decodeAttributeAsString(getAttribute(node, "cmd"));
-  const type = decodeAttributeAsString(getAttribute(node, "type"));
-  const mode = decodeAttributeAsString(getAttribute(node, "mode"));
+function isExpressionLike(raw: string): boolean {
+  return /[(){}[\]@'$"<>!=+\-*/%]/.test(raw) || /\b(and|or|if)\b/i.test(raw);
+}
 
-  if (!title) {
-    pushIssue(issues, node, "E_REQUIRED", "item.title is required.");
+function splitPipeTokens(raw: string): string[] {
+  return raw
+    .split("|")
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token.length > 0);
+}
+
+function validateTypeField(node: AttributedNode, issues: ValidationIssue[], fieldName: string): void {
+  const value = decodeAttributeAsString(getAttribute(node, fieldName));
+  if (!value) {
+    return;
   }
-  if (!cmd) {
-    pushIssue(issues, node, "E_REQUIRED", "item.cmd is required.");
+
+  if (isExpressionLike(value)) {
+    return;
   }
-  if (type && !TYPE_ALLOWED.has(type)) {
-    pushIssue(issues, node, "E_FIELD_INVALID", `item.type has unsupported value: ${type}`);
+
+  const tokens = splitPipeTokens(value);
+  if (tokens.length === 0) {
+    return;
   }
-  if (mode && !MODE_ALLOWED.has(mode)) {
-    pushIssue(issues, node, "E_FIELD_INVALID", `item.mode has unsupported value: ${mode}`);
+
+  const unknownTokens = tokens.filter((token) => !KNOWN_TYPE_TOKENS.has(token));
+  if (unknownTokens.length > 0) {
+    pushIssue(
+      issues,
+      node,
+      "W_TYPE_TOKEN_UNKNOWN",
+      `${fieldName} contains unknown type token(s): ${unknownTokens.join(", ")}`,
+      "warning",
+    );
   }
+}
+
+function validateModeField(node: AttributedNode, issues: ValidationIssue[], fieldName: string): void {
+  const value = decodeAttributeAsString(getAttribute(node, fieldName));
+  if (!value) {
+    return;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return;
+  }
+
+  if (isExpressionLike(normalized)) {
+    return;
+  }
+
+  if (normalized.startsWith("mode.")) {
+    const modeToken = normalized.slice("mode.".length);
+    if (!modeToken || KNOWN_MODE_TOKENS.has(modeToken)) {
+      return;
+    }
+    pushIssue(
+      issues,
+      node,
+      "W_MODE_TOKEN_UNKNOWN",
+      `${fieldName} contains unknown mode token: ${modeToken}`,
+      "warning",
+    );
+    return;
+  }
+
+  if (!KNOWN_MODE_TOKENS.has(normalized)) {
+    pushIssue(
+      issues,
+      node,
+      "W_MODE_TOKEN_UNKNOWN",
+      `${fieldName} contains unknown mode token: ${value}`,
+      "warning",
+    );
+  }
+}
+
+function validateVisualNodeBase(node: AttributedNode, issues: ValidationIssue[]): void {
+  validateTypeField(node, issues, "type");
+  validateModeField(node, issues, "mode");
+}
+
+function validateItem(node: Extract<ConfigNode, { kind: "item" }>, issues: ValidationIssue[]): void {
+  validateVisualNodeBase(node, issues);
 }
 
 function validateMenu(node: MenuNode, issues: ValidationIssue[]): void {
-  const title = decodeAttributeAsString(getAttribute(node, "title"));
-  const type = decodeAttributeAsString(getAttribute(node, "type"));
-  const mode = decodeAttributeAsString(getAttribute(node, "mode"));
-
-  if (!title) {
-    pushIssue(issues, node, "E_REQUIRED", "menu.title is required.");
-  }
-  if (type && !TYPE_ALLOWED.has(type)) {
-    pushIssue(issues, node, "E_FIELD_INVALID", `menu.type has unsupported value: ${type}`);
-  }
-  if (mode && !MODE_ALLOWED.has(mode)) {
-    pushIssue(issues, node, "E_FIELD_INVALID", `menu.mode has unsupported value: ${mode}`);
-  }
+  validateVisualNodeBase(node, issues);
 }
 
-function validateModify(node: Extract<ConfigNode, { kind: "modify" }>, issues: ValidationIssue[]): void {
-  const find = decodeAttributeAsString(getAttribute(node, "find"));
-  if (!find) {
-    pushIssue(issues, node, "E_REQUIRED", "modify.find is required.");
-  }
-}
+function validateModifyOrRemove(
+  node: Extract<ConfigNode, { kind: "modify" | "remove" }>,
+  issues: ValidationIssue[],
+): void {
+  validateVisualNodeBase(node, issues);
 
-function validateRemove(node: Extract<ConfigNode, { kind: "remove" }>, issues: ValidationIssue[]): void {
-  const find = decodeAttributeAsString(getAttribute(node, "find"));
-  if (!find) {
-    pushIssue(issues, node, "E_REQUIRED", "remove.find is required.");
+  const selectorKeys = ["find", "where", "in", "id", "name"];
+  const hasSelector = selectorKeys.some((key) => hasAttribute(node, key));
+  if (!hasSelector) {
+    pushIssue(
+      issues,
+      node,
+      "W_SELECTOR_MISSING",
+      `${node.kind} should define at least one selector: ${selectorKeys.join("/")}.`,
+      "warning",
+    );
   }
 }
 
@@ -123,13 +214,13 @@ function walkNode(node: ConfigNode, issues: ValidationIssue[]): void {
     return;
   }
 
-  if (node.kind === "modify") {
-    validateModify(node, issues);
+  if (node.kind === "modify" || node.kind === "remove") {
+    validateModifyOrRemove(node, issues);
     return;
   }
 
-  if (node.kind === "remove") {
-    validateRemove(node, issues);
+  if (node.kind === "separator" || node.kind === "raw") {
+    return;
   }
 }
 
