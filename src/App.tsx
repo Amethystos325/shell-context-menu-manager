@@ -32,6 +32,7 @@ import {
   type MessageKey,
   type TranslationParams,
 } from "./i18n.js";
+import type { ShellManagerApi } from "./shared/preload-api.js";
 import type { BackupEntry, LogEntry } from "./shared/ipc.js";
 import "./App.css";
 
@@ -45,6 +46,7 @@ const VARIABLE_SNIPPETS = [
 
 type SyncState = "synced" | "syncing" | "error";
 type DropPlacement = "before" | "after" | "inside";
+type AddableNodeKind = "menu" | "item" | "separator" | "modify" | "remove";
 type Translator = (key: MessageKey, params?: TranslationParams) => string;
 
 function formatErrorMessage(error: unknown, unknownMessage: string): string {
@@ -202,6 +204,14 @@ function App() {
     (error: unknown) => formatErrorMessage(error, t("error.unknown")),
     [t],
   );
+  const getShellManagerApi = useCallback((): ShellManagerApi | null => {
+    const api = window.shellManager;
+    if (!api) {
+      setStatus(t("status.preloadApiUnavailable"));
+      return null;
+    }
+    return api;
+  }, [t]);
 
   const [appName, setAppName] = useState("Shell Context Menu Manager");
   const [appVersion, setAppVersion] = useState("-");
@@ -243,8 +253,12 @@ function App() {
       if (!targetPath.trim()) {
         return;
       }
+      const api = getShellManagerApi();
+      if (!api) {
+        return;
+      }
       try {
-        const data = await window.shellManager.listBackups({ targetPath });
+        const data = await api.listBackups({ targetPath });
         setBackups(data);
         if (selectedBackupPath && !data.some((item) => item.backupPath === selectedBackupPath)) {
           setSelectedBackupPath("");
@@ -254,7 +268,7 @@ function App() {
         setStatus(t("status.refreshBackupsFailed", { error: toErrorMessage(error) }));
       }
     },
-    [selectedBackupPath, t, toErrorMessage],
+    [getShellManagerApi, selectedBackupPath, t, toErrorMessage],
   );
 
   const applyDocument = (nextDoc: ConfigDocument, nextSelectedId?: string | null) => {
@@ -292,8 +306,8 @@ function App() {
   }, [language]);
 
   useEffect(() => {
-    if (!window.shellManager) {
-      setStatus(t("status.preloadApiUnavailable"));
+    const api = getShellManagerApi();
+    if (!api) {
       return;
     }
 
@@ -301,8 +315,8 @@ function App() {
     const init = async () => {
       try {
         const [appInfo, recentLogs] = await Promise.all([
-          window.shellManager.getAppInfo(),
-          window.shellManager.getRecentLogs(),
+          api.getAppInfo(),
+          api.getRecentLogs(),
         ]);
 
         if (disposed) {
@@ -322,7 +336,7 @@ function App() {
     };
 
     void init();
-    const unsubscribe = window.shellManager.onLog((entry) => {
+    const unsubscribe = api.onLog((entry) => {
       setLogs((prev) => [...prev.slice(-199), entry]);
     });
 
@@ -330,7 +344,7 @@ function App() {
       disposed = true;
       unsubscribe();
     };
-  }, [t, toErrorMessage]);
+  }, [getShellManagerApi, t, toErrorMessage]);
 
   useEffect(() => {
     if (!filePath) {
@@ -377,9 +391,13 @@ function App() {
   }, [dirty]);
 
   const handleRead = async () => {
+    const api = getShellManagerApi();
+    if (!api) {
+      return;
+    }
     setBusy(true);
     try {
-      const data = await window.shellManager.readTextFile({ path: filePath });
+      const data = await api.readTextFile({ path: filePath });
       applySource(data.content, true);
       await refreshBackups(data.path);
       setStatus(t("status.loaded", { path: data.path }));
@@ -409,10 +427,14 @@ function App() {
   };
 
   const handleConfirmSave = async () => {
+    const api = getShellManagerApi();
+    if (!api) {
+      return;
+    }
     setBusy(true);
     try {
       const payload = sourceText;
-      const data = await window.shellManager.writeTextFile({
+      const data = await api.writeTextFile({
         path: filePath,
         content: payload,
       });
@@ -455,9 +477,13 @@ function App() {
   };
 
   const handleApplyConfig = async () => {
+    const api = getShellManagerApi();
+    if (!api) {
+      return;
+    }
     setReleaseBusy(true);
     try {
-      const result = await window.shellManager.applyConfig({ targetPath: filePath });
+      const result = await api.applyConfig({ targetPath: filePath });
       if (result.mode === "manual") {
         setManualApplySteps(result.manualSteps ?? []);
         setStatus(t("status.applyFallbackManual", { message: result.message }));
@@ -473,9 +499,13 @@ function App() {
   };
 
   const handleSelectBackup = async (backupPath: string) => {
+    const api = getShellManagerApi();
+    if (!api) {
+      return;
+    }
     setSelectedBackupPath(backupPath);
     try {
-      const preview = await window.shellManager.readTextFile({ path: backupPath });
+      const preview = await api.readTextFile({ path: backupPath });
       setBackupPreviewText(preview.content);
     } catch (error) {
       setStatus(t("status.backupPreviewFailed", { error: toErrorMessage(error) }));
@@ -486,13 +516,17 @@ function App() {
     if (!selectedBackupPath) {
       return;
     }
+    const api = getShellManagerApi();
+    if (!api) {
+      return;
+    }
     setReleaseBusy(true);
     try {
-      await window.shellManager.restoreBackup({
+      await api.restoreBackup({
         targetPath: filePath,
         backupPath: selectedBackupPath,
       });
-      const refreshed = await window.shellManager.readTextFile({ path: filePath });
+      const refreshed = await api.readTextFile({ path: filePath });
       applySource(refreshed.content, true);
       await refreshBackups(filePath);
       setStatus(t("status.rollbackSucceeded", { backupPath: selectedBackupPath }));
@@ -519,7 +553,7 @@ function App() {
     applyDocument(next, selectedId);
   };
 
-  const handleAddNode = (kind: ConfigNode["kind"]) => {
+  const handleAddNode = (kind: AddableNodeKind) => {
     if (modelLocked) {
       return;
     }
