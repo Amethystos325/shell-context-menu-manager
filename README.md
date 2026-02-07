@@ -9,18 +9,20 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 
 ## Scripts
 
-1. `npm run dev`: start Vite renderer + Electron app (development mode)
-2. `npm run build`: build renderer and Electron main/preload output
-3. `npm run start`: run built Electron app
-4. `npm run lint`: run ESLint
-5. `npm run typecheck`: run TypeScript checks
-6. `npm run core:smoke`: run parser/serializer/validator smoke tests
-7. `npm run editor:smoke`: run editor tree-operation smoke tests
-8. `npm run release:smoke`: run backup/rollback workflow smoke tests
-9. `npm run stage5:hardening`: run stage 5 stress/error hardening checks
-10. `npm run res:parse-check`: run parser/validator checks against `res/*.nss` real samples
-11. `npm run package:win:dir`: build Windows unpacked directory
-12. `npm run package:win`: build Windows NSIS installer
+1. `npm run dev`: start Vite HMR + Electron auto-restart (development mode)
+2. `npm run dev:renderer`: renderer-only fast debug (uses mock preload API in DEV when Electron is absent)
+3. `npm run build`: build renderer and Electron main/preload output
+4. `npm run start`: run built Electron app
+5. `npm run lint`: run ESLint
+6. `npm run typecheck`: run TypeScript checks
+7. `npm run core:smoke`: run parser/serializer/validator smoke tests
+8. `npm run editor:smoke`: run editor tree-operation smoke tests
+9. `npm run preview:smoke`: run runtime preview simulation smoke tests
+10. `npm run release:smoke`: run backup/rollback workflow smoke tests
+11. `npm run stage5:hardening`: run stage 5 stress/error hardening checks
+12. `npm run res:parse-check`: run parser/validator checks against `res/*.nss` real samples
+13. `npm run package:win:dir`: build Windows unpacked directory
+14. `npm run package:win`: build Windows NSIS installer
 
 ## Stage 1 Delivered
 
