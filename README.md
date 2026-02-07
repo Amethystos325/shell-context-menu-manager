@@ -17,6 +17,8 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 6. `npm run core:smoke`: run parser/serializer/validator smoke tests
 7. `npm run editor:smoke`: run editor tree-operation smoke tests
 8. `npm run release:smoke`: run backup/rollback workflow smoke tests
+9. `npm run package:win:dir`: build Windows unpacked directory
+10. `npm run package:win`: build Windows NSIS installer
 
 ## Stage 1 Delivered
 
@@ -85,3 +87,8 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 3. Phase 0 artifacts:
    - `docs/Phase0_Feature_Freeze.md`
    - `docs/Phase0_Page_Flow.md`
+4. Stage 5 artifacts:
+   - `docs/Stage5_Test_Cases.md`
+   - `docs/Stage5_Test_Report.md`
+   - `docs/User_Manual.md`
+   - `docs/Known_Issues.md`

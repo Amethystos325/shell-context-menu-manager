@@ -144,7 +144,7 @@ function createWindow(): BrowserWindow {
   if (isDev) {
     void window.loadURL(process.env.VITE_DEV_SERVER_URL as string);
   } else {
-    void window.loadFile(path.join(__dirname, "../dist/index.html"));
+    void window.loadFile(path.join(__dirname, "../../dist/index.html"));
   }
 
   return window;

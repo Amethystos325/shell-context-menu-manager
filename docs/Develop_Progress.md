@@ -161,7 +161,16 @@
     - `npm run core:smoke`
     - `npm run editor:smoke`
     - `npm run release:smoke`
+  - 补充阶段 5 文档产出：
+    - 测试用例清单：`docs/Stage5_Test_Cases.md`
+    - 测试报告：`docs/Stage5_Test_Report.md`
+    - 使用手册：`docs/User_Manual.md`
+    - 已知问题：`docs/Known_Issues.md`
+  - 完成 Windows 打包链路验证：
+    - `npm run package:win:dir`
+    - `npm run package:win`
+    - 产物：`release/win-unpacked`、`release/Shell Context Menu Manager Setup 0.1.0.exe`
 - 下一阶段应完成工作：
   - 增补手工回归用例清单与执行记录（覆盖文件/文件夹/桌面场景）。
   - 完成异常测试记录（无权限、占用、非法语法）。
-  - 准备安装包产出与最小使用手册。
+  - 补充安装包安装/卸载手工验证记录。
