@@ -57,9 +57,12 @@ const api: ShellManagerApi = {
   },
   async readTextFile(input) {
     const path = assertNonEmptyString(input.path, "path");
+    const createIfMissing =
+      input.createIfMissing === undefined ? undefined : Boolean(input.createIfMissing);
     const result = (await ipcRenderer.invoke(IPC_CHANNELS.FILE_READ_TEXT, {
       ...input,
       path,
+      createIfMissing,
     })) as IpcResult<ReadTextFileOutput>;
     return unwrapIpcResult(result);
   },

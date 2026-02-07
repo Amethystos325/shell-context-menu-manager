@@ -1,4 +1,4 @@
-import { constants as fsConstants } from "node:fs";
+import { constants as fsConstants, existsSync } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -167,6 +167,19 @@ function createWindow(): BrowserWindow {
 }
 
 function getDefaultTestFilePath(): string {
+  const candidates = [
+    path.resolve(process.cwd(), "res", "shell.nss"),
+    path.resolve(app.getAppPath(), "res", "shell.nss"),
+    path.resolve(app.getAppPath(), "..", "res", "shell.nss"),
+    path.resolve(app.getAppPath(), "..", "..", "res", "shell.nss"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return path.normalize(candidate);
+    }
+  }
+
   return path.join(app.getPath("userData"), "test-data", "ipc-test.txt");
 }
 
@@ -317,12 +330,13 @@ function registerIpcHandlers(): void {
       try {
         assertObject(input);
         const filePath = validateTextPath(input.path);
+        const createIfMissing = input.createIfMissing !== false;
 
         try {
           await access(filePath, fsConstants.R_OK);
         } catch (error) {
           const code = (error as NodeJS.ErrnoException).code;
-          if (code === "ENOENT") {
+          if (code === "ENOENT" && createIfMissing) {
             await mkdir(path.dirname(filePath), { recursive: true });
             await writeFile(filePath, "", "utf-8");
           } else {
