@@ -192,6 +192,21 @@
     - 新增命令 `npm run res:parse-check`
     - 回归样例目录：`res/*.nss`
     - 结果：`9/9` 文件解析通过，校验问题 `0`
+  - 完成“实时预览（所见即所得 v1）”：
+    - 新增运行时预览引擎：`src/preview/runtime-preview.ts`
+    - 预览支持场景切换（桌面/文件/文件夹/磁盘/空白处/任务栏）
+    - 预览支持 `type/mode/where/vis/find` 条件过滤与 `modify/remove` 规则命中模拟
+    - 预览同时展示“系统/第三方菜单模拟”与“Shell.nss 渲染菜单”
+    - 新增预览 smoke：`scripts/preview-smoke.ts`（`npm run preview:smoke`）
+  - 完成预览一致性增强（v1.1）：
+    - 预览递归解析 `import` 引用文件并合并节点渲染
+    - 输出改为“系统/三方 + shell”合并后的最终菜单预览（单栏）
+    - 读取 import 文件时禁用缺失文件自动创建，避免预览副作用
+    - 增加来源标签与场景引导：明确区分系统/三方与 shell.nss，且在“当前上下文未命中 shell”时给出可执行提示
+  - 完成高效调试模式（renderer-only）：
+    - 新增 mock preload API：`src/mock/mock-shell-manager-api.ts`
+    - `npm run dev:renderer` 下无 Electron 也可读取 `res/*.nss`、预览、保存、回滚（mock）
+    - `npm run dev` 升级为 Vite HMR + Electron 自动重启（`electronmon`）
 - 下一阶段应完成工作：
   - 增补真实右键场景手工回归记录（文件/文件夹/桌面/多选）。
   - 补全文件占用冲突手工测试记录（结合可重试路径）。
