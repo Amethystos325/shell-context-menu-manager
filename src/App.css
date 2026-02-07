@@ -1,0 +1,171 @@
+.app-shell {
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 1080px;
+  padding: 20px;
+}
+
+.app-header {
+  align-items: center;
+  background: #132e49;
+  border-radius: 12px;
+  color: #eaf2fb;
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+
+.app-header h1 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.app-header p {
+  color: #b5c7db;
+  margin: 4px 0 0;
+}
+
+.status-chip {
+  background: #1d4368;
+  border: 1px solid #3d6488;
+  border-radius: 999px;
+  font-size: 13px;
+  max-width: 480px;
+  overflow: hidden;
+  padding: 6px 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel {
+  background: #f8fbff;
+  border: 1px solid #d8e7f7;
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.panel h2 {
+  color: #15324c;
+  font-size: 16px;
+  margin: 0;
+}
+
+.panel label {
+  color: #36536e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel input,
+.panel textarea {
+  border: 1px solid #c2d8ee;
+  border-radius: 8px;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.panel input:focus,
+.panel textarea:focus {
+  border-color: #4f8cc5;
+  outline: 2px solid #d5e8f9;
+}
+
+.panel textarea {
+  min-height: 240px;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.actions button {
+  background: #165ea0;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px;
+}
+
+.actions button:disabled {
+  background: #86a9cc;
+  cursor: not-allowed;
+}
+
+.actions button:not(:disabled):hover {
+  background: #0f4f89;
+}
+
+.log-list {
+  border: 1px solid #dce8f5;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px;
+}
+
+.log-row {
+  border-bottom: 1px dashed #dce7f3;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 54px 1fr 3fr;
+  padding-bottom: 6px;
+}
+
+.log-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.level {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.level-info {
+  background: #d2ecff;
+  color: #195d8f;
+}
+
+.level-warn {
+  background: #fdeebc;
+  color: #7c5600;
+}
+
+.level-error {
+  background: #ffd7d2;
+  color: #8e2014;
+}
+
+.level-debug {
+  background: #ece1ff;
+  color: #4f3083;
+}
+
+.log-time {
+  color: #496683;
+  font-size: 12px;
+}
+
+.log-message {
+  color: #1f3953;
+  font-size: 13px;
+}
+
+.empty-tip {
+  color: #6a8298;
+  margin: 0;
+}

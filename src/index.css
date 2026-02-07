@@ -1,0 +1,20 @@
+:root {
+  color: #182737;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-synthesis: none;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #ebf2fa;
+  margin: 0;
+  min-height: 100vh;
+  min-width: 960px;
+}
