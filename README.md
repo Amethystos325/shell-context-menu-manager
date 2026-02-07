@@ -90,5 +90,6 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 4. Stage 5 artifacts:
    - `docs/Stage5_Test_Cases.md`
    - `docs/Stage5_Test_Report.md`
+   - `docs/Stage5_Manual_Test_Record.md`
    - `docs/User_Manual.md`
    - `docs/Known_Issues.md`

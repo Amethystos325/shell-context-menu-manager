@@ -164,6 +164,7 @@
   - 补充阶段 5 文档产出：
     - 测试用例清单：`docs/Stage5_Test_Cases.md`
     - 测试报告：`docs/Stage5_Test_Report.md`
+    - 手工测试记录模板：`docs/Stage5_Manual_Test_Record.md`
     - 使用手册：`docs/User_Manual.md`
     - 已知问题：`docs/Known_Issues.md`
   - 完成 Windows 打包链路验证：
