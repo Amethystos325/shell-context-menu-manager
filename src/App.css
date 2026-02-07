@@ -31,6 +31,29 @@
   font-size: 12px;
 }
 
+.header-tools {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.language-select {
+  align-items: center;
+  color: #c7ddf0;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.language-select select {
+  background: #eaf3fc;
+  border: 1px solid #8fb7db;
+  border-radius: 8px;
+  color: #123a5f;
+  font: inherit;
+  padding: 3px 8px;
+}
+
 .panel {
   background: #f8fbff;
   border: 1px solid #d8e7f7;
@@ -478,6 +501,18 @@
 }
 
 @media (max-width: 1320px) {
+  .app-header {
+    align-items: start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .header-tools {
+    justify-items: start;
+    width: 100%;
+  }
+  .status-chip {
+    max-width: 100%;
+  }
   .editor-grid {
     grid-template-columns: 1fr;
   }

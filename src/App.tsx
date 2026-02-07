@@ -23,6 +23,15 @@ import {
   updateImportPath,
   updateNodeAttribute,
 } from "./editor/document-utils.js";
+import {
+  getInitialLanguage,
+  getLanguageLocale,
+  persistLanguage,
+  translate,
+  type Language,
+  type MessageKey,
+  type TranslationParams,
+} from "./i18n.js";
 import type { BackupEntry, LogEntry } from "./shared/ipc.js";
 import "./App.css";
 
@@ -36,18 +45,19 @@ const VARIABLE_SNIPPETS = [
 
 type SyncState = "synced" | "syncing" | "error";
 type DropPlacement = "before" | "after" | "inside";
+type Translator = (key: MessageKey, params?: TranslationParams) => string;
 
-function formatErrorMessage(error: unknown): string {
+function formatErrorMessage(error: unknown, unknownMessage: string): string {
   if (error && typeof error === "object") {
     const errorLike = error as { code?: string; message?: string; details?: string };
     if (errorLike.code) {
-      return `${errorLike.code}: ${errorLike.message ?? "Unknown error."}`;
+      return `${errorLike.code}: ${errorLike.message ?? unknownMessage}`;
     }
     if (errorLike.message) {
       return errorLike.message;
     }
   }
-  return "Unknown error.";
+  return unknownMessage;
 }
 
 function getFirstNodeId(document: ConfigDocument | null): string | null {
@@ -57,12 +67,12 @@ function getFirstNodeId(document: ConfigDocument | null): string | null {
   return document.nodes[0].id;
 }
 
-function nodeLabel(node: ConfigNode): string {
+function nodeLabel(node: ConfigNode, t: Translator): string {
   if (node.kind === "separator") {
-    return "separator";
+    return t("node.separator");
   }
   if (node.kind === "import") {
-    return `import ${node.path}`;
+    return `${t("node.import")} ${node.path}`;
   }
   const title = getNodeAttribute(node, "title") || getNodeAttribute(node, "find");
   return title ? `${node.kind}: ${title}` : node.kind;
@@ -114,9 +124,10 @@ interface TreeProps {
   onSelect: (id: string) => void;
   onDropNode: (sourceId: string, targetId: string, placement: DropPlacement) => void;
   modelLocked: boolean;
+  t: Translator;
 }
 
-function TreeView({ nodes, selectedId, onSelect, onDropNode, modelLocked }: TreeProps) {
+function TreeView({ nodes, selectedId, onSelect, onDropNode, modelLocked, t }: TreeProps) {
   const handleDrop =
     (targetId: string, placement: DropPlacement) => (event: React.DragEvent<HTMLElement>) => {
       event.preventDefault();
@@ -149,7 +160,7 @@ function TreeView({ nodes, selectedId, onSelect, onDropNode, modelLocked }: Tree
             onClick={() => onSelect(node.id)}
             onDragStart={handleDragStart(node.id)}
           >
-            {nodeLabel(node)}
+            {nodeLabel(node, t)}
           </button>
           {node.kind === "menu" ? (
             <>
@@ -160,6 +171,7 @@ function TreeView({ nodes, selectedId, onSelect, onDropNode, modelLocked }: Tree
                   onSelect={onSelect}
                   onDropNode={onDropNode}
                   modelLocked={modelLocked}
+                  t={t}
                 />
               ) : null}
               <div
@@ -181,11 +193,21 @@ function TreeView({ nodes, selectedId, onSelect, onDropNode, modelLocked }: Tree
 }
 
 function App() {
+  const [language, setLanguage] = useState<Language>(() => getInitialLanguage());
+  const t = useCallback(
+    (key: MessageKey, params?: TranslationParams) => translate(language, key, params),
+    [language],
+  );
+  const toErrorMessage = useCallback(
+    (error: unknown) => formatErrorMessage(error, t("error.unknown")),
+    [t],
+  );
+
   const [appName, setAppName] = useState("Shell Context Menu Manager");
   const [appVersion, setAppVersion] = useState("-");
   const [filePath, setFilePath] = useState("");
   const [backupRootPath, setBackupRootPath] = useState("");
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatus] = useState(() => translate(getInitialLanguage(), "status.ready"));
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState(false);
   const [releaseBusy, setReleaseBusy] = useState(false);
@@ -229,10 +251,10 @@ function App() {
           setBackupPreviewText("");
         }
       } catch (error) {
-        setStatus(`Refresh backups failed: ${formatErrorMessage(error)}`);
+        setStatus(t("status.refreshBackupsFailed", { error: toErrorMessage(error) }));
       }
     },
-    [selectedBackupPath],
+    [selectedBackupPath, t, toErrorMessage],
   );
 
   const applyDocument = (nextDoc: ConfigDocument, nextSelectedId?: string | null) => {
@@ -265,8 +287,13 @@ function App() {
   };
 
   useEffect(() => {
+    persistLanguage(language);
+    document.documentElement.lang = getLanguageLocale(language);
+  }, [language]);
+
+  useEffect(() => {
     if (!window.shellManager) {
-      setStatus("Electron preload API is unavailable.");
+      setStatus(t("status.preloadApiUnavailable"));
       return;
     }
 
@@ -289,7 +316,7 @@ function App() {
         setLogs(recentLogs);
       } catch (error) {
         if (!disposed) {
-          setStatus(`Init failed: ${formatErrorMessage(error)}`);
+          setStatus(t("status.initFailed", { error: toErrorMessage(error) }));
         }
       }
     };
@@ -303,7 +330,7 @@ function App() {
       disposed = true;
       unsubscribe();
     };
-  }, []);
+  }, [t, toErrorMessage]);
 
   useEffect(() => {
     if (!filePath) {
@@ -355,9 +382,9 @@ function App() {
       const data = await window.shellManager.readTextFile({ path: filePath });
       applySource(data.content, true);
       await refreshBackups(data.path);
-      setStatus(`Loaded: ${data.path}`);
+      setStatus(t("status.loaded", { path: data.path }));
     } catch (error) {
-      setStatus(`Read failed: ${formatErrorMessage(error)}`);
+      setStatus(t("status.readFailed", { error: toErrorMessage(error) }));
     } finally {
       setBusy(false);
     }
@@ -366,13 +393,13 @@ function App() {
   const handlePrepareSave = () => {
     const result = parseAndValidate(sourceText);
     if (result.parseIssues.length > 0) {
-      setStatus("Save blocked: parse errors exist.");
+      setStatus(t("status.saveBlockedParse"));
       setParseIssues(result.parseIssues);
       setSyncState("error");
       return;
     }
     if (result.validationIssues.some((issue) => issue.severity === "error")) {
-      setStatus("Save blocked: validation errors exist.");
+      setStatus(t("status.saveBlockedValidation"));
       setValidationIssues(result.validationIssues);
       return;
     }
@@ -392,13 +419,19 @@ function App() {
       setLastSavedText(payload);
       setShowDiffPreview(false);
       await refreshBackups(data.path);
-      setStatus(
-        `Saved: ${data.path} (${data.bytes} bytes)${
-          data.backupPath ? `, backup=${data.backupPath}` : ""
-        }`,
-      );
+      if (data.backupPath) {
+        setStatus(
+          t("status.savedWithBackup", {
+            path: data.path,
+            bytes: data.bytes,
+            backupPath: data.backupPath,
+          }),
+        );
+      } else {
+        setStatus(t("status.saved", { path: data.path, bytes: data.bytes }));
+      }
     } catch (error) {
-      setStatus(`Save failed: ${formatErrorMessage(error)}`);
+      setStatus(t("status.saveFailed", { error: toErrorMessage(error) }));
     } finally {
       setBusy(false);
     }
@@ -414,10 +447,10 @@ function App() {
       const nextSelectedId = getNodeByPath(result.document, prevPath)?.id ?? getFirstNodeId(result.document);
       setSelectedId(nextSelectedId);
       setSyncState("synced");
-      setStatus("Model refreshed from source.");
+      setStatus(t("status.modelRefreshed"));
     } else {
       setSyncState("error");
-      setStatus("Source parse failed. Please fix parse issues first.");
+      setStatus(t("status.sourceParseFailed"));
     }
   };
 
@@ -427,13 +460,13 @@ function App() {
       const result = await window.shellManager.applyConfig({ targetPath: filePath });
       if (result.mode === "manual") {
         setManualApplySteps(result.manualSteps ?? []);
-        setStatus(`Apply fallback to manual: ${result.message}`);
+        setStatus(t("status.applyFallbackManual", { message: result.message }));
       } else {
         setManualApplySteps([]);
-        setStatus(result.message);
+        setStatus(t("status.applyAutoSucceeded"));
       }
     } catch (error) {
-      setStatus(`Apply failed: ${formatErrorMessage(error)}`);
+      setStatus(t("status.applyFailed", { error: toErrorMessage(error) }));
     } finally {
       setReleaseBusy(false);
     }
@@ -445,7 +478,7 @@ function App() {
       const preview = await window.shellManager.readTextFile({ path: backupPath });
       setBackupPreviewText(preview.content);
     } catch (error) {
-      setStatus(`Backup preview failed: ${formatErrorMessage(error)}`);
+      setStatus(t("status.backupPreviewFailed", { error: toErrorMessage(error) }));
     }
   };
 
@@ -462,9 +495,9 @@ function App() {
       const refreshed = await window.shellManager.readTextFile({ path: filePath });
       applySource(refreshed.content, true);
       await refreshBackups(filePath);
-      setStatus(`Rollback succeeded from ${selectedBackupPath}`);
+      setStatus(t("status.rollbackSucceeded", { backupPath: selectedBackupPath }));
     } catch (error) {
-      setStatus(`Rollback failed: ${formatErrorMessage(error)}`);
+      setStatus(t("status.rollbackFailed", { error: toErrorMessage(error) }));
     } finally {
       setReleaseBusy(false);
     }
@@ -552,78 +585,91 @@ function App() {
       <header className="app-header">
         <div>
           <h1>{appName}</h1>
-          <p>Stage 5 Stabilization In Progress | Version {appVersion}</p>
-          {backupRootPath ? <p className="backup-root">Backups: {backupRootPath}</p> : null}
+          <p>{t("app.subtitle", { version: appVersion })}</p>
+          {backupRootPath ? <p className="backup-root">{t("app.backupsRoot", { path: backupRootPath })}</p> : null}
         </div>
-        <div className={dirty ? "status-chip dirty" : "status-chip"}>{status}</div>
+        <div className="header-tools">
+          <label className="language-select" htmlFor="language">
+            <span>{t("language.label")}</span>
+            <select
+              id="language"
+              value={language}
+              onChange={(event) => setLanguage(event.target.value as Language)}
+            >
+              <option value="zh">{t("language.zh")}</option>
+              <option value="en">{t("language.en")}</option>
+            </select>
+          </label>
+          <div className={dirty ? "status-chip dirty" : "status-chip"}>{status}</div>
+        </div>
       </header>
 
       <section className="top-actions panel">
-        <label htmlFor="file-path">Config File Path</label>
+        <label htmlFor="file-path">{t("label.configFilePath")}</label>
         <input
           id="file-path"
           type="text"
           value={filePath}
           onChange={(event) => setFilePath(event.target.value)}
-          placeholder="C:\\path\\to\\shell.nss"
+          placeholder={t("placeholder.configFilePath")}
         />
         <div className="actions">
           <button type="button" onClick={handleRead} disabled={busy || isPathEmpty}>
-            Read
+            {t("action.read")}
           </button>
           <button type="button" onClick={handlePrepareSave} disabled={busy || isPathEmpty}>
-            Save
+            {t("action.save")}
           </button>
           <button type="button" onClick={handleSyncModelFromSource} disabled={busy}>
-            Refresh Model
+            {t("action.refreshModel")}
           </button>
           <button type="button" onClick={handleApplyConfig} disabled={releaseBusy || isPathEmpty}>
-            Apply
+            {t("action.apply")}
           </button>
           <button type="button" onClick={() => void refreshBackups(filePath)} disabled={releaseBusy || isPathEmpty}>
-            Refresh Backups
+            {t("action.refreshBackups")}
           </button>
         </div>
       </section>
 
       <section className="editor-grid">
         <section className="panel tree-panel">
-          <h2>Menu Tree</h2>
+          <h2>{t("section.menuTree")}</h2>
           <div className="actions compact">
             <button type="button" onClick={() => handleAddNode("menu")} disabled={modelLocked}>
-              +Menu
+              {t("action.addMenu")}
             </button>
             <button type="button" onClick={() => handleAddNode("item")} disabled={modelLocked}>
-              +Item
+              {t("action.addItem")}
             </button>
             <button type="button" onClick={() => handleAddNode("separator")} disabled={modelLocked}>
-              +Sep
+              {t("action.addSeparator")}
             </button>
             <button type="button" onClick={() => handleAddNode("modify")} disabled={modelLocked}>
-              +Modify
+              {t("action.addModify")}
             </button>
             <button type="button" onClick={() => handleAddNode("remove")} disabled={modelLocked}>
-              +Remove
+              {t("action.addRemove")}
             </button>
             <button type="button" onClick={handleDuplicateNode} disabled={!selectedNode || modelLocked}>
-              Copy
+              {t("action.copy")}
             </button>
             <button type="button" onClick={handleDeleteNode} disabled={!selectedNode || modelLocked}>
-              Delete
+              {t("action.delete")}
             </button>
           </div>
           <div className="actions compact">
             <button type="button" onClick={() => handleMoveNode("up")} disabled={!selectedNode || modelLocked}>
-              Up
+              {t("action.up")}
             </button>
             <button type="button" onClick={() => handleMoveNode("down")} disabled={!selectedNode || modelLocked}>
-              Down
+              {t("action.down")}
             </button>
           </div>
           <p className={modelLocked ? "tree-tip warn" : "tree-tip"}>
             {modelLocked
-              ? "Source contains parse errors. Fix source or refresh model to unlock tree editing."
-              : "Drag node labels to reorder. Drop inside a menu to append as child."}
+              ? t("tip.treeLocked")
+              : t("tip.treeDrag")}
           </p>
           {documentModel ? (
             documentModel.nodes.length > 0 ? (
@@ -633,21 +679,22 @@ function App() {
                 onSelect={setSelectedId}
                 onDropNode={handleDropNode}
                 modelLocked={modelLocked}
+                t={t}
               />
             ) : (
-              <p className="empty-tip">No nodes yet. Add one from above.</p>
+              <p className="empty-tip">{t("tip.noNodesYet")}</p>
             )
           ) : (
-            <p className="empty-tip">Load source and refresh model to start editing.</p>
+            <p className="empty-tip">{t("tip.loadSourceFirst")}</p>
           )}
         </section>
 
         <section className="panel attr-panel">
-          <h2>Properties</h2>
+          <h2>{t("section.properties")}</h2>
           <div className="rule-center">
-            <p className="rule-title">Rule Center (modify/remove)</p>
+            <p className="rule-title">{t("section.ruleCenter")}</p>
             {ruleNodes.length === 0 ? (
-              <p className="empty-tip">No rule nodes yet.</p>
+              <p className="empty-tip">{t("tip.noRuleNodes")}</p>
             ) : (
               <div className="rule-list">
                 {ruleNodes.map((rule) => (
@@ -657,20 +704,20 @@ function App() {
                     className={selectedId === rule.id ? "rule-pill active" : "rule-pill"}
                     onClick={() => setSelectedId(rule.id)}
                   >
-                    {rule.kind}: {getNodeAttribute(rule, "find") || "(empty find)"}
+                    {rule.kind}: {getNodeAttribute(rule, "find") || t("tip.emptyFind")}
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {!selectedNode ? <p className="empty-tip">Select a node to edit attributes.</p> : null}
+          {!selectedNode ? <p className="empty-tip">{t("tip.selectNode")}</p> : null}
           {selectedNode && selectedNode.kind === "separator" ? (
-            <p className="empty-tip">Separator has no editable properties.</p>
+            <p className="empty-tip">{t("tip.separatorNoProps")}</p>
           ) : null}
           {selectedNode && selectedNode.kind === "import" ? (
             <div className="field-grid">
-              <label htmlFor="attr-import-path">Path</label>
+              <label htmlFor="attr-import-path">{t("field.path")}</label>
               <input
                 id="attr-import-path"
                 value={selectedNode.path}
@@ -682,28 +729,28 @@ function App() {
 
           {selectedNode && selectedNode.kind === "menu" ? (
             <div className="field-grid">
-              <label htmlFor="attr-title">title</label>
+              <label htmlFor="attr-title">{t("field.title")}</label>
               <input
                 id="attr-title"
                 value={getNodeAttribute(selectedNode, "title")}
                 onChange={(event) => handleNodeAttrChange("title", event.target.value)}
                 disabled={modelLocked}
               />
-              <label htmlFor="attr-mode">mode</label>
+              <label htmlFor="attr-mode">{t("field.mode")}</label>
               <input
                 id="attr-mode"
                 value={getNodeAttribute(selectedNode, "mode")}
                 onChange={(event) => handleNodeAttrChange("mode", event.target.value)}
                 disabled={modelLocked}
               />
-              <label htmlFor="attr-type">type</label>
+              <label htmlFor="attr-type">{t("field.type")}</label>
               <input
                 id="attr-type"
                 value={getNodeAttribute(selectedNode, "type")}
                 onChange={(event) => handleNodeAttrChange("type", event.target.value)}
                 disabled={modelLocked}
               />
-              <label htmlFor="attr-image">image</label>
+              <label htmlFor="attr-image">{t("field.image")}</label>
               <input
                 id="attr-image"
                 value={getNodeAttribute(selectedNode, "image")}
@@ -716,42 +763,42 @@ function App() {
           {selectedNode && selectedNode.kind === "item" ? (
             <>
               <div className="field-grid">
-                <label htmlFor="item-title">title</label>
+                <label htmlFor="item-title">{t("field.title")}</label>
                 <input
                   id="item-title"
                   value={getNodeAttribute(selectedNode, "title")}
                   onChange={(event) => handleNodeAttrChange("title", event.target.value)}
                   disabled={modelLocked}
                 />
-                <label htmlFor="item-cmd">cmd</label>
+                <label htmlFor="item-cmd">{t("field.cmd")}</label>
                 <input
                   id="item-cmd"
                   value={getNodeAttribute(selectedNode, "cmd")}
                   onChange={(event) => handleNodeAttrChange("cmd", event.target.value)}
                   disabled={modelLocked}
                 />
-                <label htmlFor="item-args">args</label>
+                <label htmlFor="item-args">{t("field.args")}</label>
                 <textarea
                   id="item-args"
                   value={getNodeAttribute(selectedNode, "args")}
                   onChange={(event) => handleNodeAttrChange("args", event.target.value)}
                   disabled={modelLocked}
                 />
-                <label htmlFor="item-type">type</label>
+                <label htmlFor="item-type">{t("field.type")}</label>
                 <input
                   id="item-type"
                   value={getNodeAttribute(selectedNode, "type")}
                   onChange={(event) => handleNodeAttrChange("type", event.target.value)}
                   disabled={modelLocked}
                 />
-                <label htmlFor="item-mode">mode</label>
+                <label htmlFor="item-mode">{t("field.mode")}</label>
                 <input
                   id="item-mode"
                   value={getNodeAttribute(selectedNode, "mode")}
                   onChange={(event) => handleNodeAttrChange("mode", event.target.value)}
                   disabled={modelLocked}
                 />
-                <label htmlFor="item-tip">tip</label>
+                <label htmlFor="item-tip">{t("field.tip")}</label>
                 <input
                   id="item-tip"
                   value={getNodeAttribute(selectedNode, "tip")}
@@ -760,7 +807,7 @@ function App() {
                 />
               </div>
               <div>
-                <p className="variable-title">Variables</p>
+                <p className="variable-title">{t("section.variables")}</p>
                 <div className="variable-row">
                   {VARIABLE_SNIPPETS.map((snippet) => (
                     <button
@@ -779,7 +826,7 @@ function App() {
 
           {selectedNode && (selectedNode.kind === "modify" || selectedNode.kind === "remove") ? (
             <div className="field-grid">
-              <label htmlFor="rule-find">find</label>
+              <label htmlFor="rule-find">{t("field.find")}</label>
               <input
                 id="rule-find"
                 value={getNodeAttribute(selectedNode, "find")}
@@ -788,14 +835,14 @@ function App() {
               />
               {selectedNode.kind === "modify" ? (
                 <>
-                  <label htmlFor="rule-vis">vis</label>
+                  <label htmlFor="rule-vis">{t("field.vis")}</label>
                   <input
                     id="rule-vis"
                     value={getNodeAttribute(selectedNode, "vis")}
                     onChange={(event) => handleNodeAttrChange("vis", event.target.value)}
                     disabled={modelLocked}
                   />
-                  <label htmlFor="rule-position">position</label>
+                  <label htmlFor="rule-position">{t("field.position")}</label>
                   <input
                     id="rule-position"
                     value={getNodeAttribute(selectedNode, "position")}
@@ -809,36 +856,40 @@ function App() {
         </section>
 
         <section className="panel source-panel">
-          <h2>Source Preview</h2>
+          <h2>{t("section.sourcePreview")}</h2>
           <textarea
             value={sourceText}
             onChange={(event) => {
               setSourceText(event.target.value);
               setSyncState("syncing");
             }}
-            placeholder="Source text will be shown here."
+            placeholder={t("placeholder.sourcePreview")}
           />
 
           <p className={syncState === "error" ? "sync-state warn" : "sync-state"}>
-            {syncState === "syncing" && "Synchronizing source to model..."}
-            {syncState === "synced" && "Source and model are synchronized."}
-            {syncState === "error" && "Parse errors detected. Tree/property editing is temporarily locked."}
+            {syncState === "syncing" && t("sync.syncing")}
+            {syncState === "synced" && t("sync.synced")}
+            {syncState === "error" && t("sync.error")}
           </p>
 
           <div className="issues">
-            <h3>Parse Issues</h3>
+            <h3>{t("section.parseIssues")}</h3>
             {parseIssues.length === 0 ? (
-              <p className="empty-tip">No parse issues.</p>
+              <p className="empty-tip">{t("tip.noParseIssues")}</p>
             ) : (
               parseIssues.map((issue) => (
                 <p key={`${issue.range.start.offset}-${issue.message}`}>
-                  {issue.message} (line {issue.range.start.line}, col {issue.range.start.column})
+                  {issue.message}{" "}
+                  {t("issue.position", {
+                    line: issue.range.start.line,
+                    column: issue.range.start.column,
+                  })}
                 </p>
               ))
             )}
-            <h3>Validation Issues</h3>
+            <h3>{t("section.validationIssues")}</h3>
             {validationIssues.length === 0 ? (
-              <p className="empty-tip">No validation issues.</p>
+              <p className="empty-tip">{t("tip.noValidationIssues")}</p>
             ) : (
               validationIssues.map((issue) => (
                 <p key={`${issue.code}-${issue.nodeId ?? "n/a"}-${issue.message}`}>
@@ -852,19 +903,22 @@ function App() {
 
       <section className="release-grid">
         <section className="panel diff-panel">
-          <h2>Diff Preview</h2>
+          <h2>{t("section.diffPreview")}</h2>
           {!showDiffPreview ? (
-            <p className="empty-tip">Click Save to open diff preview before write.</p>
+            <p className="empty-tip">{t("tip.openDiffPreview")}</p>
           ) : null}
           {showDiffPreview && diffPreview ? (
             <>
               <p className="diff-summary">
-                old lines: {diffPreview.oldLineCount}, new lines: {diffPreview.newLineCount},
-                changes: {diffPreview.hasChanges ? "yes" : "no"}
+                {t("diff.summary", {
+                  oldLines: diffPreview.oldLineCount,
+                  newLines: diffPreview.newLineCount,
+                  hasChanges: diffPreview.hasChanges ? t("word.yes") : t("word.no"),
+                })}
               </p>
               <div className="diff-list">
                 {diffLines.length === 0 ? (
-                  <p className="empty-tip">No changed lines.</p>
+                  <p className="empty-tip">{t("tip.noChangedLines")}</p>
                 ) : (
                   diffLines.slice(0, 240).map((line, index) => (
                     <p key={`${line.type}-${index}`} className={`diff-line ${line.type}`}>
@@ -876,10 +930,10 @@ function App() {
               </div>
               <div className="actions">
                 <button type="button" onClick={handleConfirmSave} disabled={busy || isPathEmpty}>
-                  Confirm Save
+                  {t("action.confirmSave")}
                 </button>
                 <button type="button" onClick={() => setShowDiffPreview(false)} disabled={busy}>
-                  Cancel
+                  {t("action.cancel")}
                 </button>
               </div>
             </>
@@ -887,11 +941,11 @@ function App() {
         </section>
 
         <section className="panel backup-panel">
-          <h2>Rollback Center</h2>
+          <h2>{t("section.rollbackCenter")}</h2>
           <div className="backup-layout">
             <div className="backup-list">
               {backups.length === 0 ? (
-                <p className="empty-tip">No backups yet.</p>
+                <p className="empty-tip">{t("tip.noBackupsYet")}</p>
               ) : (
                 backups.map((item) => (
                   <button
@@ -901,7 +955,7 @@ function App() {
                     onClick={() => void handleSelectBackup(item.backupPath)}
                   >
                     <span>{item.fileName}</span>
-                    <span>{new Date(item.createdAt).toLocaleString()}</span>
+                    <span>{new Date(item.createdAt).toLocaleString(getLanguageLocale(language))}</span>
                   </button>
                 ))
               )}
@@ -910,12 +964,12 @@ function App() {
               className="backup-preview"
               value={backupPreviewText}
               readOnly
-              placeholder="Select a backup to preview content."
+              placeholder={t("placeholder.backupPreview")}
             />
           </div>
           <div className="actions">
             <button type="button" onClick={handleRestoreBackup} disabled={!selectedBackupPath || releaseBusy}>
-              Restore Selected Backup
+              {t("action.restoreSelectedBackup")}
             </button>
           </div>
         </section>
@@ -923,7 +977,7 @@ function App() {
 
       {manualApplySteps.length > 0 ? (
         <section className="panel manual-panel">
-          <h2>Manual Apply Steps</h2>
+          <h2>{t("section.manualApplySteps")}</h2>
           {manualApplySteps.map((step) => (
             <p key={step}>{step}</p>
           ))}
@@ -931,10 +985,10 @@ function App() {
       ) : null}
 
       <section className="panel log-panel">
-        <h2>Logs</h2>
+        <h2>{t("section.logs")}</h2>
         <div className="log-list">
           {logs.length === 0 ? (
-            <p className="empty-tip">No logs yet.</p>
+            <p className="empty-tip">{t("tip.noLogsYet")}</p>
           ) : (
             logs
               .slice()
