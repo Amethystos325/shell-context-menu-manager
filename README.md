@@ -15,6 +15,7 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 4. `npm run lint`: run ESLint
 5. `npm run typecheck`: run TypeScript checks
 6. `npm run core:smoke`: run parser/serializer/validator smoke tests
+7. `npm run editor:smoke`: run editor tree-operation smoke tests
 
 ## Stage 1 Delivered
 

@@ -1,11 +1,13 @@
 import type { Attribute, ConfigDocument, ConfigNode, MenuNode } from "../core/index.js";
 
 type EditableNode = Extract<ConfigNode, { attributes: Attribute[] }>;
+type DropPlacement = "before" | "after" | "inside";
 
 interface NodeRef {
   node: ConfigNode;
   siblings: ConfigNode[];
   index: number;
+  path: number[];
 }
 
 const STRING_FIELDS = new Set([
@@ -37,14 +39,19 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function findNodeRefInSiblings(id: string, siblings: ConfigNode[]): NodeRef | undefined {
+function findNodeRefInSiblings(
+  id: string,
+  siblings: ConfigNode[],
+  parentPath: number[] = [],
+): NodeRef | undefined {
   for (let index = 0; index < siblings.length; index += 1) {
     const node = siblings[index];
+    const path = [...parentPath, index];
     if (node.id === id) {
-      return { node, siblings, index };
+      return { node, siblings, index, path };
     }
     if (node.kind === "menu") {
-      const found = findNodeRefInSiblings(id, node.children);
+      const found = findNodeRefInSiblings(id, node.children, path);
       if (found) {
         return found;
       }
@@ -194,8 +201,81 @@ function setAttributeOnNode(node: EditableNode, key: string, value: string): voi
   });
 }
 
+function isPathPrefix(prefix: number[], target: number[]): boolean {
+  if (prefix.length > target.length) {
+    return false;
+  }
+  return prefix.every((part, index) => part === target[index]);
+}
+
+function getNodeByPathInternal(nodes: ConfigNode[], path: number[]): ConfigNode | undefined {
+  if (path.length === 0) {
+    return undefined;
+  }
+  let siblings = nodes;
+  let node: ConfigNode | undefined;
+  for (let depth = 0; depth < path.length; depth += 1) {
+    const index = path[depth];
+    node = siblings[index];
+    if (!node) {
+      return undefined;
+    }
+    if (depth < path.length - 1) {
+      if (node.kind !== "menu") {
+        return undefined;
+      }
+      siblings = node.children;
+    }
+  }
+  return node;
+}
+
+function detachNode(document: ConfigDocument, nodeId: string): { detached: ConfigNode; document: ConfigDocument } | null {
+  const ref = findNodeRef(document, nodeId);
+  if (!ref) {
+    return null;
+  }
+  const [detached] = ref.siblings.splice(ref.index, 1);
+  return { detached, document };
+}
+
+function insertNodeByTarget(
+  document: ConfigDocument,
+  node: ConfigNode,
+  targetId: string,
+  placement: DropPlacement,
+): boolean {
+  if (placement === "inside") {
+    const menu = findMenuNode(document, targetId);
+    if (!menu) {
+      return false;
+    }
+    menu.children.push(node);
+    return true;
+  }
+
+  const targetRef = findNodeRef(document, targetId);
+  if (!targetRef) {
+    return false;
+  }
+  const insertIndex = placement === "before" ? targetRef.index : targetRef.index + 1;
+  targetRef.siblings.splice(insertIndex, 0, node);
+  return true;
+}
+
 export function getNodeById(document: ConfigDocument, nodeId: string): ConfigNode | undefined {
   return findNodeRef(document, nodeId)?.node;
+}
+
+export function getNodePathById(document: ConfigDocument, nodeId: string): number[] | null {
+  return findNodeRef(document, nodeId)?.path ?? null;
+}
+
+export function getNodeByPath(document: ConfigDocument, path: number[] | null): ConfigNode | undefined {
+  if (!path || path.length === 0) {
+    return undefined;
+  }
+  return getNodeByPathInternal(document.nodes, path);
 }
 
 export function addNode(
@@ -266,6 +346,40 @@ export function moveNode(
   return next;
 }
 
+export function moveNodeByDrop(
+  document: ConfigDocument,
+  sourceNodeId: string,
+  targetNodeId: string,
+  placement: DropPlacement,
+): { document: ConfigDocument; selectedId: string } {
+  if (sourceNodeId === targetNodeId) {
+    return { document, selectedId: sourceNodeId };
+  }
+
+  const sourcePath = getNodePathById(document, sourceNodeId);
+  const targetPath = getNodePathById(document, targetNodeId);
+  if (!sourcePath || !targetPath) {
+    return { document, selectedId: sourceNodeId };
+  }
+
+  if (isPathPrefix(sourcePath, targetPath)) {
+    return { document, selectedId: sourceNodeId };
+  }
+
+  const next = cloneDocument(document);
+  const detachedResult = detachNode(next, sourceNodeId);
+  if (!detachedResult) {
+    return { document, selectedId: sourceNodeId };
+  }
+
+  const inserted = insertNodeByTarget(next, detachedResult.detached, targetNodeId, placement);
+  if (!inserted) {
+    next.nodes.push(detachedResult.detached);
+  }
+
+  return { document: next, selectedId: detachedResult.detached.id };
+}
+
 export function duplicateNode(
   document: ConfigDocument,
   nodeId: string,
@@ -294,6 +408,16 @@ export function updateNodeAttribute(
   }
 
   setAttributeOnNode(ref.node, key, value);
+  return next;
+}
+
+export function updateImportPath(document: ConfigDocument, nodeId: string, path: string): ConfigDocument {
+  const next = cloneDocument(document);
+  const ref = findNodeRef(next, nodeId);
+  if (!ref || ref.node.kind !== "import") {
+    return next;
+  }
+  ref.node.path = path;
   return next;
 }
 
