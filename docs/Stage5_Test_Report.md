@@ -10,10 +10,11 @@
 3. `npm run core:smoke`
 4. `npm run editor:smoke`
 5. `npm run release:smoke`
-6. `npm run build`
-7. `npm run start`（启动烟测）
-8. `npm run package:win:dir`
-9. `npm run package:win`
+6. `npm run stage5:hardening`
+7. `npm run build`
+8. `npm run start`（启动烟测）
+9. `npm run package:win:dir`
+10. `npm run package:win`
 
 结果：
 1. 全部通过。
@@ -21,6 +22,11 @@
 3. Windows 打包产物已生成：
    - `release/win-unpacked`
    - `release/Shell Context Menu Manager Setup 0.1.0.exe`
+4. 阶段 5 强化脚本通过：
+   - `parse-and-validation-guard`
+   - `save-and-rollback-stress`（40 次写入 + 20 次回滚）
+   - `rollback-missing-backup`
+   - `permission-denied-best-effort`
 
 ## 2. 已覆盖范围
 
@@ -28,10 +34,14 @@
 2. 树编辑核心能力（增删改排、拖拽、节点路径映射）。
 3. 发布闭环核心能力（写入前备份、备份裁剪、回滚恢复）。
 4. 应用配置动作自动失败回退逻辑（命令失败时返回手动步骤）。
+5. 错误场景稳定性补充覆盖：
+   - 备份缺失恢复失败场景。
+   - 权限写入失败场景（best-effort）。
+   - 连续保存与回滚压力场景。
 
 ## 3. 未覆盖项（待补充手工）
 
 1. 文件/文件夹/桌面/背景等真实右键场景行为验证。
-2. 无权限目录和文件占用冲突的真实环境回归。
-3. 30 分钟连续编辑稳定性记录。
+2. 文件占用冲突的真实环境回归（当前仅改进错误提示映射，未做完整手工记录）。
+3. 30 分钟连续编辑 UI 稳定性记录（当前为脚本压力覆盖，未补完整手工轨迹）。
 4. 安装包安装/卸载路径验证（安装后自动更新链路未验证）。

@@ -171,7 +171,15 @@
     - `npm run package:win:dir`
     - `npm run package:win`
     - 产物：`release/win-unpacked`、`release/Shell Context Menu Manager Setup 0.1.0.exe`
+  - 补充阶段 5 强化测试脚本：`scripts/stage5-hardening.ts`
+    - 40 次连续写入 + 20 次连续回滚压力验证
+    - 备份缺失恢复失败验证（ENOENT）
+    - 权限写入失败验证（best-effort）
+    - 对应命令：`npm run stage5:hardening`
+  - 改进异常错误提示映射：`electron/main.ts`
+    - 文件占用错误返回明确重试指引
+    - 备份缺失回滚返回明确错误信息
 - 下一阶段应完成工作：
-  - 增补手工回归用例清单与执行记录（覆盖文件/文件夹/桌面场景）。
-  - 完成异常测试记录（无权限、占用、非法语法）。
-  - 补充安装包安装/卸载手工验证记录。
+  - 增补真实右键场景手工回归记录（文件/文件夹/桌面/多选）。
+  - 补全文件占用冲突手工测试记录（结合可重试路径）。
+  - 补充安装包安装/覆盖安装/卸载手工验证记录。

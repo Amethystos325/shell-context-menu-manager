@@ -552,7 +552,7 @@ function App() {
       <header className="app-header">
         <div>
           <h1>{appName}</h1>
-          <p>Stage 4 Release Workflow In Progress | Version {appVersion}</p>
+          <p>Stage 5 Stabilization In Progress | Version {appVersion}</p>
           {backupRootPath ? <p className="backup-root">Backups: {backupRootPath}</p> : null}
         </div>
         <div className={dirty ? "status-chip dirty" : "status-chip"}>{status}</div>

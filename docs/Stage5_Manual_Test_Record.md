@@ -3,6 +3,13 @@
 文档日期：2026-02-07  
 执行人：待填写
 
+## 0. 自动化前置结果（本地）
+
+1. `npm run core:smoke`：通过。
+2. `npm run editor:smoke`：通过。
+3. `npm run release:smoke`：通过。
+4. `npm run stage5:hardening`：通过（40 次写入 + 20 次回滚压力、备份缺失、权限写入场景）。
+
 ## 1. 场景回归记录
 
 | 用例编号 | 场景 | 预期结果 | 实际结果 | 状态 |

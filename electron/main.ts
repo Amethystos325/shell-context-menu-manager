@@ -110,6 +110,20 @@ function toIpcError(error: unknown, fallbackCode: ErrorCode): IpcErrorShape {
         details: error.message,
       };
     }
+    if (code === "EBUSY" || code === "ETXTBSY" || code === "EAGAIN") {
+      return {
+        code: fallbackCode,
+        message: "Target file is in use. Close related process and retry.",
+        details: error.message,
+      };
+    }
+    if (code === "ENOENT" && fallbackCode === ERROR_CODES.ROLLBACK_FAIL) {
+      return {
+        code: ERROR_CODES.ROLLBACK_FAIL,
+        message: "Backup file does not exist.",
+        details: error.message,
+      };
+    }
     return {
       code: fallbackCode,
       message: error.message,
