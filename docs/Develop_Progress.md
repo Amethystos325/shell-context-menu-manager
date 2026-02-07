@@ -9,8 +9,8 @@
 | --- | --- | --- | --- | --- |
 | 阶段 0 | 需求冻结与交互定稿 | Done | 2026-02-07 | 2026-02-07 |
 | 阶段 1 | 工程底座与安全通道 | Done | 2026-02-07 | 2026-02-07 |
-| 阶段 2 | 配置内核（解析、模型、序列化、校验） | In Progress | 2026-02-07 | - |
-| 阶段 3 | 可视化编辑器 | Not Started | - | - |
+| 阶段 2 | 配置内核（解析、模型、序列化、校验） | Done | 2026-02-07 | 2026-02-07 |
+| 阶段 3 | 可视化编辑器 | In Progress | 2026-02-07 | - |
 | 阶段 4 | 发布闭环（规则、Diff、备份、回滚、应用） | Not Started | - | - |
 | 阶段 5 | 稳定性测试与交付 | Not Started | - | - |
 
@@ -64,9 +64,25 @@
 
 ### 阶段 2：配置内核（解析、模型、序列化、校验）
 
-- 当前状态：`In Progress`
+- 当前状态：`Done`
 - 已完成工作：
-  - 阶段启动，已完成工程底座对接，可进入配置解析与序列化实现。
+  - 设计并实现统一领域模型：`src/core/types.ts`。
+  - 实现最小语法子集解析器：`src/core/parser.ts`，支持：
+    - `menu/item/separator`
+    - `modify/remove`
+    - `import`（字符串和裸路径识别）
+    - 行注释/块注释、行列定位、语法错误抛出
+  - 实现模型序列化器：`src/core/serializer.ts`。
+  - 实现校验器：`src/core/validator.ts`，覆盖：
+    - 必填校验（`item.title/cmd`、`menu.title`、`modify/remove.find`）
+    - 字段合法性校验（`type`、`mode`）
+  - 实现文本 Diff 数据结构：`src/core/diff.ts`。
+  - 实现统一工作流入口：`src/core/workflow.ts`（`parseAndValidate`、`roundTrip`）。
+  - 建立内部测试入口：`scripts/core-smoke.ts` + `samples/configs/*.nss`（10 份样例）。
+  - 完成验收验证：
+    - `npm run core:smoke` 通过（含读-改-写-再读一致场景）
+    - `npm run typecheck` 通过
+    - `npm run build` 通过
 - 下一阶段（阶段 3）应完成工作：
   - 实现菜单树编辑与属性面板。
   - 打通源码视图与变量快捷插入。
@@ -74,9 +90,28 @@
 
 ### 阶段 3：可视化编辑器
 
-- 当前状态：`Not Started`
+- 当前状态：`In Progress`
 - 已完成工作：
-  - 暂无
+  - 完成三栏编辑器基础布局（树/属性/源码预览）并接入主页面：
+    - `src/App.tsx`
+    - `src/App.css`
+  - 完成菜单树基础操作：
+    - 新增节点（`menu/item/separator`）
+    - 删除节点
+    - 复制节点
+    - 上下移动排序
+  - 完成按节点类型的属性面板动态渲染：
+    - `menu` 属性
+    - `item` 属性（含 `args`）
+    - `modify/remove` 基础属性
+  - 完成源码预览区与模型联动（模型改动实时序列化到源码）。
+  - 完成变量快捷插入（`@sel.path` 等）并写入 `item.args`。
+  - 完成脏状态提示与窗口关闭前确认（`beforeunload`）。
+  - 编辑器基础工具函数已抽离：`src/editor/document-utils.ts`。
+- 当前阶段剩余工作：
+  - 细化树交互体验（拖拽排序、节点复制交互反馈）。
+  - 完善源码视图与模型双向同步细节（更精准定位、冲突处理）。
+  - 补充阶段 3 专项稳定性用例与手工测试记录。
 - 下一阶段（阶段 4）应完成工作：
   - 实现 `modify/remove` 专用编辑器。
   - 打通保存前 Diff、自动备份和回滚中心。

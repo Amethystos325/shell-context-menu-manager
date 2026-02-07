@@ -12,6 +12,7 @@
     "build": "tsc -b && npm run build:electron && vite build",
     "start": "electron dist-electron/electron/main.js",
     "typecheck": "tsc -b && tsc -p tsconfig.electron.json --noEmit",
+    "core:smoke": "tsx scripts/core-smoke.ts",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -35,6 +36,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "wait-on": "^9.0.3"
+    "wait-on": "^9.0.3",
+    "tsx": "^4.20.6"
   }
 }

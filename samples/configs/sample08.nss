@@ -1,0 +1,2 @@
+menu(title="Empty Group") {
+}

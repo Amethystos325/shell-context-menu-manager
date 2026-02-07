@@ -14,6 +14,7 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 3. `npm run start`: run built Electron app
 4. `npm run lint`: run ESLint
 5. `npm run typecheck`: run TypeScript checks
+6. `npm run core:smoke`: run parser/serializer/validator smoke tests
 
 ## Stage 1 Delivered
 
@@ -30,6 +31,20 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
    - write text file
    - fetch app info
    - stream operation logs
+
+## Stage 2 Delivered
+
+1. Config core modules:
+   - parser: `src/core/parser.ts`
+   - serializer: `src/core/serializer.ts`
+   - validator: `src/core/validator.ts`
+   - diff model: `src/core/diff.ts`
+2. Unified workflow helpers:
+   - `parseAndValidate`
+   - `roundTrip`
+3. Internal smoke coverage with 10 sample configs:
+   - `scripts/core-smoke.ts`
+   - `samples/configs/*.nss`
 
 ## Docs
 

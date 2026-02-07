@@ -1,16 +1,16 @@
 .app-shell {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   margin: 0 auto;
-  max-width: 1080px;
-  padding: 20px;
+  max-width: 1440px;
+  padding: 18px;
 }
 
 .app-header {
   align-items: center;
-  background: #132e49;
+  background: linear-gradient(135deg, #0f3554, #1f4f74);
   border-radius: 12px;
-  color: #eaf2fb;
+  color: #ecf5fe;
   display: flex;
   justify-content: space-between;
   padding: 16px 18px;
@@ -22,20 +22,8 @@
 }
 
 .app-header p {
-  color: #b5c7db;
+  color: #c7ddf0;
   margin: 4px 0 0;
-}
-
-.status-chip {
-  background: #1d4368;
-  border: 1px solid #3d6488;
-  border-radius: 999px;
-  font-size: 13px;
-  max-width: 480px;
-  overflow: hidden;
-  padding: 6px 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .panel {
@@ -44,45 +32,48 @@
   border-radius: 12px;
   display: grid;
   gap: 10px;
-  padding: 14px;
+  padding: 12px;
 }
 
-.panel h2 {
-  color: #15324c;
-  font-size: 16px;
+.panel h2,
+.panel h3 {
+  color: #173651;
   margin: 0;
 }
 
-.panel label {
-  color: #36536e;
+.top-actions {
+  grid-template-columns: 130px 1fr auto;
+  align-items: center;
+}
+
+.top-actions label {
   font-size: 13px;
   font-weight: 600;
 }
 
-.panel input,
-.panel textarea {
+.top-actions input,
+.attr-panel input,
+.attr-panel textarea,
+.source-panel textarea {
   border: 1px solid #c2d8ee;
   border-radius: 8px;
   box-sizing: border-box;
   font: inherit;
-  padding: 10px 12px;
+  padding: 9px 10px;
   width: 100%;
 }
 
-.panel input:focus,
-.panel textarea:focus {
+.top-actions input:focus,
+.attr-panel input:focus,
+.attr-panel textarea:focus,
+.source-panel textarea:focus {
   border-color: #4f8cc5;
   outline: 2px solid #d5e8f9;
 }
 
-.panel textarea {
-  min-height: 240px;
-  resize: vertical;
-}
-
 .actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .actions button {
@@ -91,18 +82,154 @@
   border-radius: 8px;
   color: #fff;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  padding: 8px 14px;
+  padding: 8px 12px;
 }
 
-.actions button:disabled {
-  background: #86a9cc;
+.actions button:disabled,
+.variable-row button:disabled {
+  background: #9db7d4;
   cursor: not-allowed;
 }
 
-.actions button:not(:disabled):hover {
+.actions button:not(:disabled):hover,
+.variable-row button:not(:disabled):hover {
   background: #0f4f89;
+}
+
+.actions.compact {
+  flex-wrap: wrap;
+}
+
+.editor-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 320px 420px 1fr;
+  min-height: 500px;
+}
+
+.tree-panel,
+.attr-panel,
+.source-panel {
+  align-content: start;
+}
+
+.tree-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  max-height: 520px;
+  overflow: auto;
+  padding: 0 0 0 10px;
+}
+
+.tree-list ul {
+  border-left: 1px dashed #bdd3e8;
+  margin-top: 5px;
+  padding-left: 10px;
+}
+
+.tree-node {
+  background: #edf4fd;
+  border: 1px solid #c9dcec;
+  border-radius: 8px;
+  color: #1d4261;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 7px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.tree-node.active {
+  background: #dbefff;
+  border-color: #5f9fda;
+  color: #0c4f86;
+  font-weight: 700;
+}
+
+.field-grid {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 80px 1fr;
+}
+
+.field-grid label {
+  color: #385875;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field-grid textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.variable-title {
+  color: #355977;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.variable-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.variable-row button {
+  background: #1a72bc;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.source-panel textarea {
+  font-family: Consolas, "Courier New", monospace;
+  min-height: 310px;
+  resize: vertical;
+}
+
+.issues {
+  border-top: 1px solid #dce8f5;
+  display: grid;
+  gap: 5px;
+  padding-top: 10px;
+}
+
+.issues p {
+  color: #284763;
+  font-size: 12px;
+  margin: 0;
+}
+
+.status-chip {
+  background: #1e4669;
+  border: 1px solid #42698b;
+  border-radius: 999px;
+  font-size: 12px;
+  max-width: 520px;
+  overflow: hidden;
+  padding: 6px 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-chip.dirty {
+  border-color: #e3a536;
+  color: #ffeebf;
+}
+
+.log-panel {
+  min-height: 160px;
 }
 
 .log-list {
@@ -110,7 +237,7 @@
   border-radius: 8px;
   display: grid;
   gap: 8px;
-  max-height: 240px;
+  max-height: 220px;
   overflow: auto;
   padding: 10px;
 }
@@ -168,4 +295,13 @@
 .empty-tip {
   color: #6a8298;
   margin: 0;
+}
+
+@media (max-width: 1320px) {
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+  .top-actions {
+    grid-template-columns: 1fr;
+  }
 }
