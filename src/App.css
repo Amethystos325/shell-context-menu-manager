@@ -26,6 +26,11 @@
   margin: 4px 0 0;
 }
 
+.app-header .backup-root {
+  color: #9cc3e8;
+  font-size: 12px;
+}
+
 .panel {
   background: #f8fbff;
   border: 1px solid #d8e7f7;
@@ -102,6 +107,10 @@
   flex-wrap: wrap;
 }
 
+.actions.compact button {
+  padding: 6px 10px;
+}
+
 .editor-grid {
   display: grid;
   gap: 12px;
@@ -125,6 +134,44 @@
 .tree-tip.warn,
 .sync-state.warn {
   color: #8b3b20;
+  font-weight: 700;
+}
+
+.rule-center {
+  border: 1px solid #d8e7f7;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+}
+
+.rule-title {
+  color: #355977;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.rule-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rule-pill {
+  background: #ebf4ff;
+  border: 1px solid #bcd7f0;
+  border-radius: 999px;
+  color: #1e4b72;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 9px;
+}
+
+.rule-pill.active {
+  background: #d2e8ff;
+  border-color: #5b97cf;
+  color: #0f548f;
   font-weight: 700;
 }
 
@@ -262,6 +309,105 @@
   color: #ffeebf;
 }
 
+.release-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.diff-panel,
+.backup-panel,
+.manual-panel {
+  align-content: start;
+}
+
+.diff-summary {
+  color: #3e5e7d;
+  font-size: 12px;
+  margin: 0;
+}
+
+.diff-list {
+  background: #fcfeff;
+  border: 1px solid #dbe9f8;
+  border-radius: 8px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.diff-line {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.diff-line.add {
+  background: #e8f9ee;
+  color: #125a2e;
+}
+
+.diff-line.remove {
+  background: #ffe8e6;
+  color: #8a231a;
+}
+
+.diff-line.equal {
+  color: #4d6b87;
+}
+
+.backup-layout {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1.2fr;
+}
+
+.backup-list {
+  border: 1px solid #dbe9f8;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.backup-item {
+  align-items: start;
+  background: #f4f9ff;
+  border: 1px solid #cddff0;
+  border-radius: 8px;
+  color: #214969;
+  cursor: pointer;
+  display: grid;
+  font-size: 12px;
+  gap: 3px;
+  padding: 7px;
+  text-align: left;
+}
+
+.backup-item.active {
+  background: #dcedff;
+  border-color: #5f9fda;
+}
+
+.backup-preview {
+  border: 1px solid #c2d8ee;
+  border-radius: 8px;
+  font-family: Consolas, "Courier New", monospace;
+  min-height: 220px;
+  padding: 9px 10px;
+  resize: vertical;
+  width: 100%;
+}
+
+.manual-panel p {
+  color: #274968;
+  font-size: 13px;
+  margin: 0;
+}
+
 .log-panel {
   min-height: 160px;
 }
@@ -333,6 +479,12 @@
 
 @media (max-width: 1320px) {
   .editor-grid {
+    grid-template-columns: 1fr;
+  }
+  .release-grid {
+    grid-template-columns: 1fr;
+  }
+  .backup-layout {
     grid-template-columns: 1fr;
   }
   .top-actions {

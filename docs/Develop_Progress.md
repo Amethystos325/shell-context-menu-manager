@@ -10,9 +10,9 @@
 | 阶段 0 | 需求冻结与交互定稿 | Done | 2026-02-07 | 2026-02-07 |
 | 阶段 1 | 工程底座与安全通道 | Done | 2026-02-07 | 2026-02-07 |
 | 阶段 2 | 配置内核（解析、模型、序列化、校验） | Done | 2026-02-07 | 2026-02-07 |
-| 阶段 3 | 可视化编辑器 | In Progress | 2026-02-07 | - |
-| 阶段 4 | 发布闭环（规则、Diff、备份、回滚、应用） | Not Started | - | - |
-| 阶段 5 | 稳定性测试与交付 | Not Started | - | - |
+| 阶段 3 | 可视化编辑器 | Done | 2026-02-07 | 2026-02-07 |
+| 阶段 4 | 发布闭环（规则、Diff、备份、回滚、应用） | Done | 2026-02-07 | 2026-02-07 |
+| 阶段 5 | 稳定性测试与交付 | In Progress | 2026-02-07 | - |
 
 状态取值约定：
 1. `Not Started`：未开始。
@@ -90,7 +90,7 @@
 
 ### 阶段 3：可视化编辑器
 
-- 当前状态：`In Progress`
+- 当前状态：`Done`
 - 已完成工作：
   - 完成三栏编辑器基础布局（树/属性/源码预览）并接入主页面：
     - `src/App.tsx`
@@ -123,8 +123,7 @@
     - `npm run build`
     - `npm run start` 启动烟测
 - 当前阶段剩余工作：
-  - 补充阶段 3 手工稳定性记录（连续长时编辑场景）。
-  - 完善字段编辑体验（枚举字段下拉、更多快捷模板）。
+  - 无（已进入阶段 4）。
 - 下一阶段（阶段 4）应完成工作：
   - 实现 `modify/remove` 专用编辑器。
   - 打通保存前 Diff、自动备份和回滚中心。
@@ -132,17 +131,37 @@
 
 ### 阶段 4：发布闭环（规则、Diff、备份、回滚、应用）
 
-- 当前状态：`Not Started`
+- 当前状态：`Done`
 - 已完成工作：
-  - 暂无
+  - 完成 `modify/remove` 列表化编辑入口（Rule Center）：`src/App.tsx`。
+  - 完成保存前 Diff 预览并支持确认/取消写入：`src/App.tsx`。
+  - 完成自动备份策略（写入前自动备份，按时间序保留最近 N 份）：`electron/backup-service.ts`、`electron/main.ts`。
+  - 完成回滚中心（备份列表 + 预览 + 恢复）：`src/App.tsx`、`electron/main.ts`。
+  - 完成应用配置动作：
+    - 自动尝试执行 `shell -register -restart`
+    - 自动失败时提供手动步骤指引
+    - 对应实现：`electron/main.ts`、`src/App.tsx`
+  - 完成发布链路 IPC 扩展：
+    - `app:apply-config`
+    - `backup:list`
+    - `backup:restore`
+    - 对应定义：`src/shared/ipc.ts`、`src/shared/preload-api.ts`、`electron/preload.ts`
+  - 完成阶段 4 专项 smoke：
+    - `scripts/release-smoke.ts`
+    - `npm run release:smoke` 通过
 - 下一阶段（阶段 5）应完成工作：
   - 完成核心回归测试与异常测试。
   - 输出 Windows 安装包、使用手册、问题清单。
 
 ### 阶段 5：稳定性测试与交付
 
-- 当前状态：`Not Started`
+- 当前状态：`In Progress`
 - 已完成工作：
-  - 暂无
+  - 已具备自动 smoke 套件基础：
+    - `npm run core:smoke`
+    - `npm run editor:smoke`
+    - `npm run release:smoke`
 - 下一阶段应完成工作：
-  - MVP 迭代规划（超出当前计划范围时新增文档）。
+  - 增补手工回归用例清单与执行记录（覆盖文件/文件夹/桌面场景）。
+  - 完成异常测试记录（无权限、占用、非法语法）。
+  - 准备安装包产出与最小使用手册。

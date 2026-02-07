@@ -2,8 +2,11 @@ import type { ErrorCode } from "./error-codes.js";
 
 export const IPC_CHANNELS = {
   APP_GET_INFO: "app:get-info",
+  APP_APPLY_CONFIG: "app:apply-config",
   FILE_READ_TEXT: "file:read-text",
   FILE_WRITE_TEXT: "file:write-text",
+  BACKUP_LIST: "backup:list",
+  BACKUP_RESTORE: "backup:restore",
   LOG_GET_RECENT: "log:get-recent",
   LOG_PUSH: "log:push",
 } as const;
@@ -15,6 +18,7 @@ export interface AppInfo {
   appName: string;
   appVersion: string;
   defaultTestFilePath: string;
+  backupRootPath: string;
 }
 
 export interface ReadTextFileInput {
@@ -34,6 +38,48 @@ export interface WriteTextFileInput {
 export interface WriteTextFileOutput {
   path: string;
   bytes: number;
+  backupPath?: string;
+}
+
+export interface BackupEntry {
+  id: string;
+  backupPath: string;
+  fileName: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface ListBackupsInput {
+  targetPath: string;
+}
+
+export interface ListBackupsOutput {
+  targetPath: string;
+  backups: BackupEntry[];
+}
+
+export interface RestoreBackupInput {
+  targetPath: string;
+  backupPath: string;
+}
+
+export interface RestoreBackupOutput {
+  targetPath: string;
+  backupPath: string;
+  bytes: number;
+  createdBackupPath?: string;
+}
+
+export interface ApplyConfigInput {
+  targetPath: string;
+}
+
+export interface ApplyConfigOutput {
+  mode: "auto" | "manual";
+  commandTried: string;
+  success: boolean;
+  message: string;
+  manualSteps?: string[];
 }
 
 export interface LogEntry {

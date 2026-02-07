@@ -3,9 +3,12 @@ import { AppError, ERROR_CODES } from "../src/shared/error-codes.js";
 import {
   IPC_CHANNELS,
   type AppInfo,
+  type ApplyConfigOutput,
+  type BackupEntry,
   type IpcResult,
   type LogEntry,
   type ReadTextFileOutput,
+  type RestoreBackupOutput,
   type WriteTextFileOutput,
 } from "../src/shared/ipc.js";
 import type { ShellManagerApi } from "../src/shared/preload-api.js";
@@ -31,6 +34,14 @@ const api: ShellManagerApi = {
     const result = (await ipcRenderer.invoke(IPC_CHANNELS.APP_GET_INFO)) as IpcResult<AppInfo>;
     return unwrapIpcResult(result);
   },
+  async applyConfig(input) {
+    const targetPath = assertNonEmptyString(input.targetPath, "targetPath");
+    const result = (await ipcRenderer.invoke(IPC_CHANNELS.APP_APPLY_CONFIG, {
+      ...input,
+      targetPath,
+    })) as IpcResult<ApplyConfigOutput>;
+    return unwrapIpcResult(result);
+  },
   async readTextFile(input) {
     const path = assertNonEmptyString(input.path, "path");
     const result = (await ipcRenderer.invoke(IPC_CHANNELS.FILE_READ_TEXT, {
@@ -48,6 +59,24 @@ const api: ShellManagerApi = {
       ...input,
       path,
     })) as IpcResult<WriteTextFileOutput>;
+    return unwrapIpcResult(result);
+  },
+  async listBackups(input) {
+    const targetPath = assertNonEmptyString(input.targetPath, "targetPath");
+    const result = (await ipcRenderer.invoke(IPC_CHANNELS.BACKUP_LIST, {
+      ...input,
+      targetPath,
+    })) as IpcResult<{ backups: BackupEntry[] }>;
+    return unwrapIpcResult(result).backups;
+  },
+  async restoreBackup(input) {
+    const targetPath = assertNonEmptyString(input.targetPath, "targetPath");
+    const backupPath = assertNonEmptyString(input.backupPath, "backupPath");
+    const result = (await ipcRenderer.invoke(IPC_CHANNELS.BACKUP_RESTORE, {
+      ...input,
+      targetPath,
+      backupPath,
+    })) as IpcResult<RestoreBackupOutput>;
     return unwrapIpcResult(result);
   },
   async getRecentLogs() {

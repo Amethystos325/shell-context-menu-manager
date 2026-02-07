@@ -1,28 +1,38 @@
 import { constants as fsConstants } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain } from "electron";
+import { BackupService } from "./backup-service.js";
+import { Logger } from "./logger.js";
 import { AppError, ERROR_CODES, type ErrorCode } from "../src/shared/error-codes.js";
 import {
   IPC_CHANNELS,
   type AppInfo,
+  type ApplyConfigInput,
+  type ApplyConfigOutput,
   type IpcErrorShape,
   type IpcResult,
+  type ListBackupsInput,
+  type ListBackupsOutput,
   type ReadTextFileInput,
   type ReadTextFileOutput,
+  type RestoreBackupInput,
+  type RestoreBackupOutput,
   type WriteTextFileInput,
   type WriteTextFileOutput,
 } from "../src/shared/ipc.js";
-import { Logger } from "./logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const MAX_TEXT_FILE_SIZE_BYTES = 1024 * 1024;
+const BACKUP_KEEP_COUNT = 10;
 
 let mainWindow: BrowserWindow | null = null;
 let logger: Logger | null = null;
+let backupService: BackupService | null = null;
 
 function ok<T>(data: T): IpcResult<T> {
   return { ok: true, data };
@@ -48,12 +58,11 @@ function validateTextPath(rawPath: unknown): string {
     throw new AppError(ERROR_CODES.VALIDATION, "Path cannot be empty.");
   }
 
-  const absolutePath = path.resolve(trimmed);
-  if (!path.isAbsolute(absolutePath)) {
+  if (!path.isAbsolute(trimmed)) {
     throw new AppError(ERROR_CODES.VALIDATION, "Path must be absolute.");
   }
 
-  return absolutePath;
+  return path.normalize(trimmed);
 }
 
 function validateTextContent(rawContent: unknown): string {
@@ -70,6 +79,17 @@ function validateTextContent(rawContent: unknown): string {
   }
 
   return rawContent;
+}
+
+function validateBackupPath(rawPath: unknown): string {
+  const backupPath = validateTextPath(rawPath);
+  if (!backupService) {
+    throw new AppError(ERROR_CODES.BACKUP_FAIL, "Backup service is unavailable.");
+  }
+  if (!backupService.isBackupPathAllowed(backupPath)) {
+    throw new AppError(ERROR_CODES.VALIDATION, "Backup path is out of allowed directory.");
+  }
+  return backupPath;
 }
 
 function toIpcError(error: unknown, fallbackCode: ErrorCode): IpcErrorShape {
@@ -104,8 +124,8 @@ function toIpcError(error: unknown, fallbackCode: ErrorCode): IpcErrorShape {
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1280,
-    height: 840,
+    width: 1360,
+    height: 900,
     minWidth: 1080,
     minHeight: 700,
     show: false,
@@ -134,11 +154,105 @@ function getDefaultTestFilePath(): string {
   return path.join(app.getPath("userData"), "test-data", "ipc-test.txt");
 }
 
+function getBackupRootPath(): string {
+  return path.join(app.getPath("userData"), "backups");
+}
+
 function createAppInfo(): AppInfo {
   return {
     appName: app.getName(),
     appVersion: app.getVersion(),
     defaultTestFilePath: getDefaultTestFilePath(),
+    backupRootPath: getBackupRootPath(),
+  };
+}
+
+function runCommand(
+  command: string,
+  args: string[],
+  timeoutMs: number,
+): Promise<{ success: boolean; output: string; exitCode: number | null }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      windowsHide: true,
+      shell: false,
+    });
+
+    let output = "";
+    let finished = false;
+
+    const done = (success: boolean, exitCode: number | null) => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      resolve({
+        success,
+        output: output.trim(),
+        exitCode,
+      });
+    };
+
+    const timer = setTimeout(() => {
+      child.kill();
+      done(false, null);
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+
+    child.on("error", (error) => {
+      output += `\n${error.message}`;
+      clearTimeout(timer);
+      done(false, null);
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      done(code === 0, code);
+    });
+  });
+}
+
+function getApplyManualSteps(targetPath: string): string[] {
+  return [
+    "1. 确认 Nilesoft Shell 已安装且扩展已注册。",
+    "2. 打开终端（建议管理员权限），执行：shell -register -restart",
+    `3. 手动验证目标配置文件：${targetPath}`,
+    "4. 若命令不可用，请使用 Ctrl + 右键执行刷新并重新验证菜单效果。",
+  ];
+}
+
+async function handleApplyConfig(input: ApplyConfigInput): Promise<ApplyConfigOutput> {
+  assertObject(input);
+  const targetPath = validateTextPath(input.targetPath);
+  const commandTried = "shell -register -restart";
+
+  const commandResult = await runCommand("shell", ["-register", "-restart"], 8000);
+  if (commandResult.success) {
+    logger?.log("info", `Apply config succeeded automatically for ${targetPath}`);
+    return {
+      mode: "auto",
+      commandTried,
+      success: true,
+      message: "配置已自动应用。",
+    };
+  }
+
+  logger?.log("warn", `Apply config auto step failed; fallback to manual for ${targetPath}`);
+  return {
+    mode: "manual",
+    commandTried,
+    success: false,
+    message:
+      commandResult.output ||
+      `自动应用失败（exit=${commandResult.exitCode ?? "timeout"}），请按手动步骤操作。`,
+    manualSteps: getApplyManualSteps(targetPath),
   };
 }
 
@@ -187,15 +301,82 @@ function registerIpcHandlers(): void {
         const filePath = validateTextPath(input.path);
         const content = validateTextContent(input.content);
 
+        const backupEntry = await backupService?.createBackupForTarget(filePath);
         await mkdir(path.dirname(filePath), { recursive: true });
         await writeFile(filePath, content, "utf-8");
 
         const bytes = Buffer.byteLength(content, "utf-8");
-        logger?.log("info", `Write file succeeded: ${filePath} (${bytes} bytes)`);
-        return ok({ path: filePath, bytes });
+        logger?.log(
+          "info",
+          `Write file succeeded: ${filePath} (${bytes} bytes)${
+            backupEntry ? `; backup=${backupEntry.backupPath}` : ""
+          }`,
+        );
+        return ok({ path: filePath, bytes, backupPath: backupEntry?.backupPath });
       } catch (error) {
         const ipcError = toIpcError(error, ERROR_CODES.WRITE_FAIL);
         logger?.log("error", `Write file failed: ${ipcError.code} ${ipcError.message}`);
+        return fail(ipcError);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.BACKUP_LIST,
+    async (_, input: ListBackupsInput): Promise<IpcResult<ListBackupsOutput>> => {
+      try {
+        assertObject(input);
+        const targetPath = validateTextPath(input.targetPath);
+        if (!backupService) {
+          throw new AppError(ERROR_CODES.BACKUP_FAIL, "Backup service unavailable.");
+        }
+        const backups = await backupService.listBackups(targetPath);
+        return ok({ targetPath, backups });
+      } catch (error) {
+        const ipcError = toIpcError(error, ERROR_CODES.BACKUP_FAIL);
+        logger?.log("error", `List backup failed: ${ipcError.code} ${ipcError.message}`);
+        return fail(ipcError);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.BACKUP_RESTORE,
+    async (_, input: RestoreBackupInput): Promise<IpcResult<RestoreBackupOutput>> => {
+      try {
+        assertObject(input);
+        const targetPath = validateTextPath(input.targetPath);
+        const backupPath = validateBackupPath(input.backupPath);
+        if (!backupService) {
+          throw new AppError(ERROR_CODES.ROLLBACK_FAIL, "Backup service unavailable.");
+        }
+
+        await access(backupPath, fsConstants.F_OK | fsConstants.R_OK);
+        const restored = await backupService.restoreBackup(targetPath, backupPath);
+        logger?.log("info", `Rollback succeeded: ${backupPath} -> ${targetPath}`);
+        return ok({
+          targetPath,
+          backupPath,
+          bytes: restored.bytes,
+          createdBackupPath: restored.createdBackupPath,
+        });
+      } catch (error) {
+        const ipcError = toIpcError(error, ERROR_CODES.ROLLBACK_FAIL);
+        logger?.log("error", `Rollback failed: ${ipcError.code} ${ipcError.message}`);
+        return fail(ipcError);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.APP_APPLY_CONFIG,
+    async (_, input: ApplyConfigInput): Promise<IpcResult<ApplyConfigOutput>> => {
+      try {
+        const result = await handleApplyConfig(input);
+        return ok(result);
+      } catch (error) {
+        const ipcError = toIpcError(error, ERROR_CODES.APPLY_FAIL);
+        logger?.log("error", `Apply config failed: ${ipcError.code} ${ipcError.message}`);
         return fail(ipcError);
       }
     },
@@ -207,6 +388,7 @@ function registerIpcHandlers(): void {
 }
 
 app.whenReady().then(() => {
+  backupService = new BackupService(getBackupRootPath(), BACKUP_KEEP_COUNT);
   logger = new Logger(path.join(app.getPath("userData"), "logs"));
   mainWindow = createWindow();
 
