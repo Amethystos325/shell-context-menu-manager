@@ -179,7 +179,21 @@
   - 改进异常错误提示映射：`electron/main.ts`
     - 文件占用错误返回明确重试指引
     - 备份缺失回滚返回明确错误信息
+  - 完成 preload API 稳定性修复：
+    - `electron/main.ts` 调整窗口 preload 运行配置
+    - `src/App.tsx` 增加 API 安全访问封装，避免 `window.shellManager` 空值崩溃
+    - `src/types/global.d.ts` 将 `shellManager` 声明为可选类型
+  - 完成解析器与校验器语义升级：
+    - `src/core/parser.ts` 支持真实 nss 常见语法（空格分隔属性、复杂表达式、未知块/声明容错）
+    - `src/core/types.ts`、`src/core/serializer.ts` 增加 `raw` 节点与扩展 import 结构支持
+    - `src/core/validator.ts` 从 MVP 枚举校验升级为官方语义友好校验
+  - 完成真实配置回归脚本与样例集：
+    - 新增 `scripts/res-parse-check.ts`
+    - 新增命令 `npm run res:parse-check`
+    - 回归样例目录：`res/*.nss`
+    - 结果：`9/9` 文件解析通过，校验问题 `0`
 - 下一阶段应完成工作：
   - 增补真实右键场景手工回归记录（文件/文件夹/桌面/多选）。
   - 补全文件占用冲突手工测试记录（结合可重试路径）。
   - 补充安装包安装/覆盖安装/卸载手工验证记录。
+  - 工程化收尾（签名、图标、发行元数据）。

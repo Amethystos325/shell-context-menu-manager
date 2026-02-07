@@ -11,10 +11,11 @@
 4. `npm run editor:smoke`
 5. `npm run release:smoke`
 6. `npm run stage5:hardening`
-7. `npm run build`
-8. `npm run start`（启动烟测）
-9. `npm run package:win:dir`
-10. `npm run package:win`
+7. `npm run res:parse-check`
+8. `npm run build`
+9. `npm run start`（启动烟测）
+10. `npm run package:win:dir`
+11. `npm run package:win`
 
 结果：
 1. 全部通过。
@@ -27,6 +28,9 @@
    - `save-and-rollback-stress`（40 次写入 + 20 次回滚）
    - `rollback-missing-backup`
    - `permission-denied-best-effort`
+5. 真实 nss 回归脚本通过：
+   - `res-parse-check: total=9, parse-pass=9, parse-fail=0`
+   - `validation-issue-total=0`
 
 ## 2. 已覆盖范围
 
@@ -38,10 +42,12 @@
    - 备份缺失恢复失败场景。
    - 权限写入失败场景（best-effort）。
    - 连续保存与回滚压力场景。
+6. 真实配置兼容性覆盖：
+   - `res/*.nss`（含 `settings/theme/imports` 真实结构）解析与语义校验通过。
 
 ## 3. 未覆盖项（待补充手工）
 
 1. 文件/文件夹/桌面/背景等真实右键场景行为验证。
-2. 文件占用冲突的真实环境回归（当前仅改进错误提示映射，未做完整手工记录）。
-3. 30 分钟连续编辑 UI 稳定性记录（当前为脚本压力覆盖，未补完整手工轨迹）。
+2. 文件占用冲突的真实环境回归（当前仅自动化与错误提示验证）。
+3. 30 分钟连续编辑 UI 稳定性记录（当前以脚本覆盖为主）。
 4. 安装包安装/卸载路径验证（安装后自动更新链路未验证）。

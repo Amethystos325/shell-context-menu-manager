@@ -18,8 +18,9 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 7. `npm run editor:smoke`: run editor tree-operation smoke tests
 8. `npm run release:smoke`: run backup/rollback workflow smoke tests
 9. `npm run stage5:hardening`: run stage 5 stress/error hardening checks
-10. `npm run package:win:dir`: build Windows unpacked directory
-11. `npm run package:win`: build Windows NSIS installer
+10. `npm run res:parse-check`: run parser/validator checks against `res/*.nss` real samples
+11. `npm run package:win:dir`: build Windows unpacked directory
+12. `npm run package:win`: build Windows NSIS installer
 
 ## Stage 1 Delivered
 
@@ -50,6 +51,9 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 3. Internal smoke coverage with 10 sample configs:
    - `scripts/core-smoke.ts`
    - `samples/configs/*.nss`
+4. Real-world nss regression check:
+   - `scripts/res-parse-check.ts`
+   - `res/*.nss`
 
 ## Stage 3 Delivered
 
