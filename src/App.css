@@ -417,6 +417,95 @@
   cursor: not-allowed;
 }
 
+.preview-system-items {
+  display: grid;
+  gap: 8px;
+}
+
+.preview-system-items-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.preview-system-items-header label {
+  color: #385875;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.preview-system-items-header button {
+  background: #1a72bc;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.preview-system-items-list {
+  border: 1px solid #c2d8ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.preview-system-items-list li {
+  background: #f4f9ff;
+  border: 1px solid #d7e6f6;
+  border-radius: 6px;
+  color: #1f4463;
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+  padding: 5px 7px;
+}
+
+.preview-system-item-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.preview-system-items-list.nested {
+  border: 0;
+  border-left: 1px dashed #bdd3e8;
+  border-radius: 0;
+  margin-top: 2px;
+  max-height: none;
+  overflow: visible;
+  padding: 2px 0 0 10px;
+}
+
+.preview-system-items-list.nested li {
+  background: #f8fbff;
+}
+
+.preview-system-items-list .preview-source-badge {
+  margin-right: 0;
+}
+
+.preview-system-items-list .preview-submenu-marker {
+  margin-left: auto;
+}
+
+.preview-system-items-list:empty {
+  border: 1px solid #c2d8ee;
+  border-radius: 8px;
+  box-sizing: border-box;
+  font: inherit;
+  min-height: 60px;
+  padding: 8px;
+  width: 100%;
+}
+
 .preview-columns {
   display: grid;
   gap: 12px;
@@ -469,6 +558,17 @@
   padding: 6px 8px;
 }
 
+.preview-entry-title {
+  min-width: 0;
+}
+
+.preview-submenu-marker {
+  color: #5c6c7d;
+  font-weight: 700;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
 .preview-toggle {
   background: #ffffff;
   border: 1px solid #b9d2e9;
@@ -496,6 +596,13 @@
   color: #7a5b00;
 }
 
+.preview-entry.disabled {
+  background: #eef2f6;
+  border-color: #d4dde6;
+  color: #7a8897;
+  opacity: 0.85;
+}
+
 .preview-source-badge {
   border-radius: 999px;
   display: inline-block;
@@ -514,6 +621,16 @@
 .preview-source-badge.source-shell {
   background: #dcf5e8;
   color: #1f6d4b;
+}
+
+.preview-source-badge.source-shellex {
+  background: #f1e8ff;
+  color: #5a388f;
+}
+
+.preview-source-badge.source-runtime-com {
+  background: #ffe9cf;
+  color: #8f5c1a;
 }
 
 .preview-entry.source-system {

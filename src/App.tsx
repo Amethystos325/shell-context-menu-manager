@@ -40,10 +40,10 @@ import {
   type PreviewLocationType,
   type RuntimePreviewContext,
   type RuntimePreviewEntry,
+  type RuntimeSystemMenuEntry,
 } from "./preview/runtime-preview.js";
-import { getMockShellManagerApi, isMockPreloadApiEnabled } from "./mock/mock-shell-manager-api.js";
 import type { ShellManagerApi } from "./shared/preload-api.js";
-import type { BackupEntry, LogEntry } from "./shared/ipc.js";
+import type { BackupEntry, LogEntry, SystemMenuEntry } from "./shared/ipc.js";
 import "./App.css";
 
 const VARIABLE_SNIPPETS = [
@@ -106,6 +106,16 @@ function flattenDiff(diff: TextDiff): Array<{ type: "equal" | "add" | "remove"; 
     }
   }
   return lines;
+}
+
+function toRuntimeSystemMenuEntries(entries: SystemMenuEntry[]): RuntimeSystemMenuEntry[] {
+  return entries
+    .map((entry) => ({
+      title: entry.title,
+      submenu: entry.submenu,
+      children: toRuntimeSystemMenuEntries(entry.children ?? []),
+    }))
+    .filter((entry) => entry.title.trim().length > 0);
 }
 
 function collectRuleNodes(document: ConfigDocument | null): ConfigNode[] {
@@ -216,6 +226,34 @@ interface PreviewTreeProps {
   depth?: number;
 }
 
+interface SystemMenuSnapshotListProps {
+  entries: SystemMenuEntry[];
+  depth?: number;
+}
+
+function SystemMenuSnapshotList({ entries, depth = 0 }: SystemMenuSnapshotListProps) {
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul className={depth === 0 ? "preview-system-items-list" : "preview-system-items-list nested"}>
+      {entries.map((entry) => (
+        <li key={entry.registryKey}>
+          <div className="preview-system-item-row">
+            <span className={`preview-source-badge source-${entry.source}`}>{entry.source}</span>
+            <span>{entry.title}</span>
+            {entry.submenu ? <span className="preview-submenu-marker">{">"}</span> : null}
+          </div>
+          {entry.children && entry.children.length > 0 ? (
+            <SystemMenuSnapshotList entries={entry.children} depth={depth + 1} />
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function PreviewTree({
   entries,
   emptyText,
@@ -236,7 +274,7 @@ function PreviewTree({
       {entries.map((entry) => (
         <li key={entry.id}>
           <p
-            className={`preview-entry source-${entry.source}${entry.labelOnly ? " label-only" : ""}`}
+            className={`preview-entry source-${entry.source}${entry.labelOnly ? " label-only" : ""}${entry.disabled ? " disabled" : ""}`}
           >
             {entry.kind === "menu" ? (
               <button
@@ -253,11 +291,12 @@ function PreviewTree({
             <span className={`preview-source-badge source-${entry.source}`}>
               {entry.source === "system" ? systemTagText : shellTagText}
             </span>
-            {entry.kind === "separator"
-              ? "----------"
-              : entry.kind === "menu"
-                ? `[Menu] ${entry.title}`
-                : entry.title}
+            <span className="preview-entry-title">
+              {entry.kind === "separator" ? "----------" : entry.title}
+            </span>
+            {(entry.kind === "menu" || entry.submenu) && entry.kind !== "separator" ? (
+              <span className="preview-submenu-marker">{">"}</span>
+            ) : null}
           </p>
           {entry.kind === "menu" &&
           entry.children &&
@@ -310,6 +349,20 @@ function getWindowsDirname(filePath: string): string {
     return normalized;
   }
   return normalized.slice(0, index);
+}
+
+function inferPreviewCurrentPath(filePath: string, locationType: PreviewLocationType): string {
+  if (!filePath.trim()) {
+    return locationType === "desktop" ? "C:\\Users\\Public\\Desktop" : "";
+  }
+  const normalized = normalizeWindowsPath(filePath);
+  if (!normalized) {
+    return locationType === "desktop" ? "C:\\Users\\Public\\Desktop" : "";
+  }
+  if (locationType === "file") {
+    return normalized;
+  }
+  return getWindowsDirname(normalized);
 }
 
 function isAbsoluteWindowsPath(filePath: string): boolean {
@@ -429,18 +482,11 @@ function App() {
     (error: unknown) => formatErrorMessage(error, t("error.unknown")),
     [t],
   );
-  const [usingMockApi, setUsingMockApi] = useState(false);
   const getShellManagerApi = useCallback((): ShellManagerApi | null => {
     const api = window.shellManager;
     if (api) {
-      setUsingMockApi(false);
       return api;
     }
-    if (isMockPreloadApiEnabled()) {
-      setUsingMockApi(true);
-      return getMockShellManagerApi();
-    }
-    setUsingMockApi(false);
     setStatus(t("status.preloadApiUnavailable"));
     return null;
   }, [t]);
@@ -471,8 +517,16 @@ function App() {
   const [previewDocument, setPreviewDocument] = useState<ConfigDocument | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [collapsedPreviewMenuIds, setCollapsedPreviewMenuIds] = useState<Set<string>>(new Set());
+  const [systemMenuEntries, setSystemMenuEntries] = useState<SystemMenuEntry[]>([]);
+  const [systemMenuLoading, setSystemMenuLoading] = useState(false);
   const [previewContext, setPreviewContext] = useState<RuntimePreviewContext>(
-    DEFAULT_RUNTIME_PREVIEW_CONTEXT,
+    {
+      ...DEFAULT_RUNTIME_PREVIEW_CONTEXT,
+      currentPath: "C:\\Users\\Public\\Desktop",
+      systemItemsOverride: [],
+      systemSubmenuTitles: [],
+      systemMenuEntries: [],
+    },
   );
 
   const selectedNode = useMemo(
@@ -503,9 +557,20 @@ function App() {
       ...prev,
       locationType,
       selectionName: getDefaultSelectionName(locationType),
+      currentPath: inferPreviewCurrentPath(filePath, locationType),
       selectionCount: getRecommendedSelectionCount(locationType),
+      systemItemsOverride: [],
+      systemSubmenuTitles: [],
+      systemMenuEntries: [],
     }));
   };
+
+  useEffect(() => {
+    setPreviewContext((prev) => ({
+      ...prev,
+      currentPath: inferPreviewCurrentPath(filePath, prev.locationType),
+    }));
+  }, [filePath]);
 
   const handleTogglePreviewMenu = useCallback((menuId: string) => {
     setCollapsedPreviewMenuIds((prev) => {
@@ -526,6 +591,63 @@ function App() {
   const handleCollapseAllPreviewMenus = () => {
     setCollapsedPreviewMenuIds(new Set(previewMenuIds));
   };
+
+  const refreshSystemMenuSnapshot = useCallback(async () => {
+    const api = getShellManagerApi();
+    if (!api) {
+      return;
+    }
+
+    setSystemMenuLoading(true);
+    try {
+      const snapshot = await api.getSystemMenuSnapshot({
+        locationType: previewContext.locationType,
+        shiftKey: previewContext.shiftKey,
+        samplePath: previewContext.selectionName,
+      });
+      setSystemMenuEntries(snapshot.entries);
+      const runtimeSystemEntries = toRuntimeSystemMenuEntries(snapshot.entries);
+      const submenuTitles: string[] = [];
+      const collectSubmenuTitles = (entries: RuntimeSystemMenuEntry[]) => {
+        for (const entry of entries) {
+          if (entry.submenu) {
+            submenuTitles.push(entry.title);
+          }
+          if (entry.children && entry.children.length > 0) {
+            collectSubmenuTitles(entry.children);
+          }
+        }
+      };
+      collectSubmenuTitles(runtimeSystemEntries);
+      setPreviewContext((prev) => ({
+        ...prev,
+        currentPath: inferPreviewCurrentPath(filePath, prev.locationType),
+        systemItemsOverride: runtimeSystemEntries.map((entry) => entry.title),
+        systemSubmenuTitles: submenuTitles,
+        systemMenuEntries: runtimeSystemEntries,
+      }));
+    } catch (error) {
+      setSystemMenuEntries([]);
+      setPreviewContext((prev) => ({
+        ...prev,
+        currentPath: inferPreviewCurrentPath(filePath, prev.locationType),
+        systemItemsOverride: [],
+        systemSubmenuTitles: [],
+        systemMenuEntries: [],
+      }));
+      setStatus(t("status.systemMenuSnapshotFailed", { error: toErrorMessage(error) }));
+    } finally {
+      setSystemMenuLoading(false);
+    }
+  }, [
+    filePath,
+    getShellManagerApi,
+    previewContext.locationType,
+    previewContext.selectionName,
+    previewContext.shiftKey,
+    t,
+    toErrorMessage,
+  ]);
 
   const refreshBackups = useCallback(
     async (targetPath: string) => {
@@ -585,12 +707,6 @@ function App() {
   }, [language]);
 
   useEffect(() => {
-    if (usingMockApi) {
-      setStatus(t("status.mockApiEnabled"));
-    }
-  }, [t, usingMockApi]);
-
-  useEffect(() => {
     const api = getShellManagerApi();
     if (!api) {
       return;
@@ -637,6 +753,10 @@ function App() {
     }
     void refreshBackups(filePath);
   }, [filePath, refreshBackups]);
+
+  useEffect(() => {
+    void refreshSystemMenuSnapshot();
+  }, [refreshSystemMenuSnapshot]);
 
   useEffect(() => {
     if (!documentModel) {
@@ -1355,6 +1475,32 @@ function App() {
             />
             <span>{t("preview.hasAdmin")}</span>
           </label>
+
+          <label className="preview-checkbox" htmlFor="preview-clipboard">
+            <input
+              id="preview-clipboard"
+              type="checkbox"
+              checked={Boolean(previewContext.clipboardHasContent)}
+              onChange={(event) => updatePreviewContext({ clipboardHasContent: event.target.checked })}
+            />
+            <span>{t("preview.clipboardHasContent")}</span>
+          </label>
+        </div>
+
+        <div className="preview-system-items">
+          <div className="preview-system-items-header">
+            <label>{t("preview.systemItems.label")}</label>
+            <button type="button" onClick={() => void refreshSystemMenuSnapshot()} disabled={systemMenuLoading}>
+              {t("preview.systemItems.refresh")}
+            </button>
+          </div>
+          {systemMenuLoading ? <p className="preview-summary">{t("preview.systemItems.loading")}</p> : null}
+          {systemMenuEntries.length === 0 ? (
+            <p className="preview-hint">{t("preview.systemItems.empty")}</p>
+          ) : (
+            <SystemMenuSnapshotList entries={systemMenuEntries} />
+          )}
+          <p className="preview-hint">{t("preview.systemItems.hint")}</p>
         </div>
 
         {runtimePreview ? (

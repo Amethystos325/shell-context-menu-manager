@@ -6,9 +6,21 @@ export interface RuntimePreviewContext {
   locationType: PreviewLocationType;
   selectionCount: number;
   selectionName: string;
+  currentPath?: string;
+  backgroundMode?: boolean;
   shiftKey: boolean;
   leftButton: boolean;
   hasAdmin: boolean;
+  clipboardHasContent?: boolean;
+  systemItemsOverride?: string[];
+  systemSubmenuTitles?: string[];
+  systemMenuEntries?: RuntimeSystemMenuEntry[];
+}
+
+export interface RuntimeSystemMenuEntry {
+  title: string;
+  submenu?: boolean;
+  children?: RuntimeSystemMenuEntry[];
 }
 
 export interface RuntimePreviewEntry {
@@ -17,6 +29,10 @@ export interface RuntimePreviewEntry {
   title: string;
   source: "system" | "shell";
   labelOnly?: boolean;
+  disabled?: boolean;
+  submenu?: boolean;
+  separatorBefore?: boolean;
+  separatorAfter?: boolean;
   children?: RuntimePreviewEntry[];
 }
 
@@ -44,6 +60,7 @@ interface ConditionEval {
 
 interface VisibilityEval extends ConditionEval {
   labelOnly: boolean;
+  disabled: boolean;
 }
 
 interface SystemItemState {
@@ -53,11 +70,15 @@ interface SystemItemState {
   orderHint: number;
   hidden: boolean;
   labelOnly: boolean;
+  disabled: boolean;
+  submenu: boolean;
+  children: RuntimePreviewEntry[];
   menuGroup: string;
 }
 
 const KNOWN_VIS_HIDDEN = new Set(["hidden", "hide", "vis.hidden"]);
 const KNOWN_VIS_LABEL = new Set(["label", "vis.label"]);
+const KNOWN_VIS_DISABLED = new Set(["disabled", "disable", "vis.disabled"]);
 
 const DEFAULT_SYSTEM_ITEMS: Record<PreviewLocationType, string[]> = {
   desktop: [
@@ -68,6 +89,8 @@ const DEFAULT_SYSTEM_ITEMS: Record<PreviewLocationType, string[]> = {
     "Undo Copy",
     "Open with Code",
     "Open Git Bash here",
+    "Open Folder as IntelliJ IDEA Community Edition Project",
+    "Open Folder as WebStorm Project",
     "NVIDIA App",
     "NVIDIA Control Panel",
     "New",
@@ -118,6 +141,44 @@ const DEFAULT_SYSTEM_ITEMS: Record<PreviewLocationType, string[]> = {
   ],
 };
 
+const DESKTOP_ORDER_HINTS: Record<string, number> = {
+  view: 10,
+  "sort by": 20,
+  refresh: 30,
+  paste: 100,
+  "undo copy": 110,
+  "open with code": 120,
+  "open git bash here": 130,
+  "open folder as intellij idea community edition project": 140,
+  "open folder as webstorm project": 150,
+  terminal: 240,
+  "file manage": 250,
+  "go to": 260,
+  "nvidia app": 340,
+  "nvidia control panel": 350,
+  new: 450,
+  "display settings": 460,
+  personalize: 470,
+};
+
+const DESKTOP_SUBMENU_TITLES = new Set(["view", "sort by", "new"]);
+const BACKGROUND_SUBMENU_TITLES = new Set(["view", "sort by", "group by", "new"]);
+
+function isSystemSubmenuTitle(context: RuntimePreviewContext, title: string): boolean {
+  const normalized = normalizeToken(title);
+  const override = new Set((context.systemSubmenuTitles ?? []).map(normalizeToken));
+  if (override.has(normalized)) {
+    return true;
+  }
+  if (context.locationType === "desktop") {
+    return DESKTOP_SUBMENU_TITLES.has(normalized);
+  }
+  if (context.locationType === "back") {
+    return BACKGROUND_SUBMENU_TITLES.has(normalized);
+  }
+  return false;
+}
+
 const DEFAULT_SELECTION_NAME: Record<PreviewLocationType, string> = {
   desktop: "Desktop",
   file: "example.txt",
@@ -128,9 +189,10 @@ const DEFAULT_SELECTION_NAME: Record<PreviewLocationType, string> = {
 };
 
 export const DEFAULT_RUNTIME_PREVIEW_CONTEXT: RuntimePreviewContext = {
-  locationType: "file",
-  selectionCount: 2,
-  selectionName: DEFAULT_SELECTION_NAME.file,
+  locationType: "desktop",
+  selectionCount: 1,
+  selectionName: DEFAULT_SELECTION_NAME.desktop,
+  backgroundMode: true,
   shiftKey: false,
   leftButton: false,
   hasAdmin: false,
@@ -140,11 +202,18 @@ export function getDefaultSelectionName(locationType: PreviewLocationType): stri
   return DEFAULT_SELECTION_NAME[locationType];
 }
 
+export function getDefaultSystemItems(locationType: PreviewLocationType): string[] {
+  return [...(DEFAULT_SYSTEM_ITEMS[locationType] ?? [])];
+}
+
 export function getRecommendedSelectionCount(locationType: PreviewLocationType): number {
-  if (locationType === "desktop" || locationType === "taskbar") {
+  if (locationType === "taskbar") {
     return 0;
   }
-  return 2;
+  if (locationType === "desktop" || locationType === "back") {
+    return 1;
+  }
+  return 1;
 }
 
 function isAttributedNode(node: ConfigNode): node is AttributedNode {
@@ -175,6 +244,59 @@ function stripQuotes(value: string): string {
   ) {
     return trimmed.slice(1, -1);
   }
+  return trimmed;
+}
+
+function toTitleCaseWords(text: string): string {
+  return text
+    .split(" ")
+    .filter((part) => part.trim().length > 0)
+    .map((part) => part[0].toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function humanizeToken(token: string): string {
+  const target = token.split(".").filter(Boolean).pop() ?? token;
+  const normalized = target
+    .replace(/^@+/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim();
+  if (!normalized) {
+    return token;
+  }
+  return toTitleCaseWords(normalized);
+}
+
+function extractFirstQuotedLiteral(expression: string): string | null {
+  const match = expression.match(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'/);
+  if (!match) {
+    return null;
+  }
+  const literal = match[1] ?? match[2] ?? "";
+  return literal.replace(/\\t/g, " ").replace(/\\n/g, " ").trim();
+}
+
+function resolveDisplayText(rawText: string): string {
+  const trimmed = stripQuotes(rawText).trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const titleRef = trimmed.match(/\btitle\.([A-Za-z0-9_.-]+)/i);
+  if (titleRef) {
+    return humanizeToken(titleRef[1]);
+  }
+
+  if (/^[A-Za-z_@][A-Za-z0-9_.@-]*$/.test(trimmed)) {
+    return humanizeToken(trimmed);
+  }
+
+  const firstLiteral = extractFirstQuotedLiteral(trimmed);
+  if (firstLiteral) {
+    return firstLiteral;
+  }
+
   return trimmed;
 }
 
@@ -325,6 +447,66 @@ function evaluateKnownBooleanSignals(expression: string, context: RuntimePreview
   return { matched: false, uncertain };
 }
 
+function evaluateNumericComparisons(
+  expression: string,
+  token: string,
+  value: number,
+): ConditionEval | null {
+  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`${escapedToken}\\s*(==|!=|>=|<=|>|<)\\s*(-?\\d+)`, "gi");
+  const checks = [...expression.matchAll(regex)];
+  if (checks.length === 0) {
+    return null;
+  }
+
+  const results = checks.map((match) => {
+    const operator = match[1];
+    const expected = Number(match[2]);
+    if (Number.isNaN(expected)) {
+      return false;
+    }
+    if (operator === "==") {
+      return value === expected;
+    }
+    if (operator === "!=") {
+      return value !== expected;
+    }
+    if (operator === ">=") {
+      return value >= expected;
+    }
+    if (operator === "<=") {
+      return value <= expected;
+    }
+    if (operator === ">") {
+      return value > expected;
+    }
+    return value < expected;
+  });
+
+  const matched = hasOrOperator(expression) ? results.some(Boolean) : results.every(Boolean);
+  return { matched, uncertain: false };
+}
+
+function getPathSegmentsLength(targetPath: string): number {
+  const normalized = targetPath.replaceAll("/", "\\").trim();
+  if (!normalized) {
+    return 0;
+  }
+  const parts = normalized.split("\\").filter((part) => part.length > 0 && part !== ".");
+  return parts.length;
+}
+
+function resolveContextPath(context: RuntimePreviewContext): string {
+  const explicit = (context.currentPath ?? "").trim();
+  if (explicit) {
+    return explicit;
+  }
+  if (/^[a-zA-Z]:[\\/]/.test(context.selectionName) || context.selectionName.startsWith("\\\\")) {
+    return context.selectionName.trim();
+  }
+  return "";
+}
+
 function matchesMode(modeText: string, context: RuntimePreviewContext): ConditionEval {
   const normalized = normalizeToken(modeText);
   if (!normalized) {
@@ -335,7 +517,7 @@ function matchesMode(modeText: string, context: RuntimePreviewContext): Conditio
   const wantsSingle = normalized.includes("single") || normalized.includes("mode.single");
 
   if (wantsMultiple && !wantsSingle) {
-    return { matched: context.selectionCount > 1, uncertain: false };
+    return { matched: context.selectionCount > 0, uncertain: false };
   }
 
   if (wantsSingle && !wantsMultiple) {
@@ -417,29 +599,61 @@ function evaluateNodeContext(node: AttributedNode, context: RuntimePreviewContex
   }
 
   const whereEval = evaluateKnownBooleanSignals(whereText, context);
+  const normalizedWhere = whereText.toLowerCase();
+  const pathValue = resolveContextPath(context);
+  const parentLen = getPathSegmentsLength(pathValue);
+  const parentLenEval = evaluateNumericComparisons(normalizedWhere, "@sel.parent.len", parentLen);
+  const sysVerMajorEval = evaluateNumericComparisons(normalizedWhere, "sys.ver.major", 11);
+  const packageExistsRegex = /package\.exists\s*\(\s*["'][^"']+["']\s*\)/i;
+  const packageExists = packageExistsRegex.test(normalizedWhere);
+  const keyRButton = normalizedWhere.includes("key.rbutton()");
+  const tokenChecks: ConditionEval[] = [];
+  if (parentLenEval) {
+    tokenChecks.push(parentLenEval);
+  }
+  if (sysVerMajorEval) {
+    tokenChecks.push(sysVerMajorEval);
+  }
+  if (packageExists) {
+    tokenChecks.push({ matched: true, uncertain: false });
+  }
+  if (keyRButton) {
+    tokenChecks.push({ matched: false, uncertain: false });
+  }
+
+  const tokenMatched = tokenChecks.length === 0
+    ? true
+    : hasOrOperator(normalizedWhere)
+      ? tokenChecks.some((item) => item.matched)
+      : tokenChecks.every((item) => item.matched);
+  const tokenUncertain = tokenChecks.some((item) => item.uncertain);
+
   return {
-    matched: whereEval.matched,
-    uncertain: typeEval.uncertain || modeEval.uncertain || whereEval.uncertain,
+    matched: whereEval.matched && tokenMatched,
+    uncertain: typeEval.uncertain || modeEval.uncertain || whereEval.uncertain || tokenUncertain,
   };
 }
 
 function evaluateVisibility(node: AttributedNode, context: RuntimePreviewContext): VisibilityEval {
   const base = evaluateNodeContext(node, context);
   if (!base.matched) {
-    return { ...base, labelOnly: false };
+    return { ...base, labelOnly: false, disabled: false };
   }
 
   const visText = getAttributeText(node, "vis");
   if (!visText) {
-    return { ...base, labelOnly: false };
+    return { ...base, labelOnly: false, disabled: false };
   }
 
   const normalized = normalizeToken(visText);
   if (KNOWN_VIS_HIDDEN.has(normalized)) {
-    return { matched: false, uncertain: false, labelOnly: false };
+    return { matched: false, uncertain: false, labelOnly: false, disabled: false };
   }
   if (KNOWN_VIS_LABEL.has(normalized)) {
-    return { matched: true, uncertain: base.uncertain, labelOnly: true };
+    return { matched: true, uncertain: base.uncertain, labelOnly: true, disabled: false };
+  }
+  if (KNOWN_VIS_DISABLED.has(normalized)) {
+    return { matched: true, uncertain: base.uncertain, labelOnly: false, disabled: true };
   }
 
   const visEval = evaluateKnownBooleanSignals(visText, context);
@@ -447,13 +661,14 @@ function evaluateVisibility(node: AttributedNode, context: RuntimePreviewContext
     matched: visEval.matched,
     uncertain: base.uncertain || visEval.uncertain,
     labelOnly: false,
+    disabled: false,
   };
 }
 
 function titleOfNode(node: AttributedNode): string {
-  const title = getAttributeText(node, "title");
+  const title = resolveDisplayText(getAttributeText(node, "title"));
   if (title) {
-    return stripQuotes(title);
+    return title;
   }
   if (node.kind === "separator") {
     return "separator";
@@ -477,6 +692,31 @@ function includeByFind(node: AttributedNode, context: RuntimePreviewContext): bo
   return matchesAnyPattern(context.selectionName, patterns);
 }
 
+function parseSeparatorHints(node: AttributedNode): { before: boolean; after: boolean } {
+  const sepText = getAttributeText(node, "sep") || getAttributeText(node, "separator");
+  if (!sepText) {
+    return { before: false, after: false };
+  }
+
+  const token = normalizeToken(sepText);
+  if (!token) {
+    return { before: true, after: false };
+  }
+  if (token.includes("both")) {
+    return { before: true, after: true };
+  }
+  if (token.includes("top") || token.includes("before")) {
+    return { before: true, after: false };
+  }
+  if (token.includes("bottom") || token.includes("after")) {
+    return { before: false, after: true };
+  }
+  if (token === "true" || token === "1" || token === "yes") {
+    return { before: true, after: false };
+  }
+  return { before: false, after: false };
+}
+
 function toShellPreviewNode(node: ConfigNode, context: RuntimePreviewContext): RuntimePreviewEntry | null {
   if (!isAttributedNode(node)) {
     return null;
@@ -490,6 +730,7 @@ function toShellPreviewNode(node: ConfigNode, context: RuntimePreviewContext): R
   if (!visibility.matched || !includeByFind(node, context)) {
     return null;
   }
+  const separatorHints = parseSeparatorHints(node);
 
   if (node.kind === "menu") {
     const children = node.children
@@ -504,6 +745,9 @@ function toShellPreviewNode(node: ConfigNode, context: RuntimePreviewContext): R
       title: titleOfNode(node),
       source: "shell",
       labelOnly: visibility.labelOnly,
+      disabled: visibility.disabled,
+      separatorBefore: separatorHints.before,
+      separatorAfter: separatorHints.after,
       children,
     };
   }
@@ -514,6 +758,9 @@ function toShellPreviewNode(node: ConfigNode, context: RuntimePreviewContext): R
     title: titleOfNode(node),
     source: "shell",
     labelOnly: visibility.labelOnly,
+    disabled: visibility.disabled,
+    separatorBefore: separatorHints.before,
+    separatorAfter: separatorHints.after,
   };
 }
 
@@ -579,19 +826,48 @@ function computeOrderHint(rawPosition: string, fallback: number): number {
   return fallback;
 }
 
-function computeShellTopLevelHint(node: ConfigNode, index: number): number {
+function getSystemOrderHint(
+  context: RuntimePreviewContext,
+  title: string,
+  fallbackIndex: number,
+): number {
+  const normalized = normalizeToken(title);
+  if (context.locationType === "desktop" || context.locationType === "back") {
+    const mapped = DESKTOP_ORDER_HINTS[normalized];
+    if (mapped !== undefined) {
+      return mapped;
+    }
+    return 200 + fallbackIndex;
+  }
+  return fallbackIndex * 10;
+}
+
+function computeShellTopLevelHint(
+  node: ConfigNode,
+  index: number,
+  context: RuntimePreviewContext,
+): number {
+  const isDesktopLike = context.locationType === "desktop" || context.locationType === "back";
+  const orderBias = index / 1000;
+
   if (!isAttributedNode(node)) {
-    return 2000 + index;
+    return isDesktopLike ? 250 + orderBias : 2000 + index;
+  }
+
+  const shellTitle = titleOfNode(node);
+  const titleHint = DESKTOP_ORDER_HINTS[normalizeToken(shellTitle)];
+  if (isDesktopLike && titleHint !== undefined) {
+    return titleHint + orderBias;
   }
 
   const position = getAttributeText(node, "pos") || getAttributeText(node, "position");
   if (position) {
     const token = normalizeToken(position);
     if (token.includes("top") || token.includes("before")) {
-      return -2000 + index;
+      return isDesktopLike ? 240 + orderBias : -2000 + index;
     }
     if (token.includes("bottom") || token.includes("after")) {
-      return 4000 + index;
+      return isDesktopLike ? 260 + orderBias : 4000 + index;
     }
     const numeric = Number(token);
     if (!Number.isNaN(numeric)) {
@@ -603,17 +879,21 @@ function computeShellTopLevelHint(node: ConfigNode, index: number): number {
   if (sep) {
     const token = normalizeToken(sep);
     if (token.includes("top") || token.includes("before")) {
-      return -1500 + index;
+      return isDesktopLike ? 240 + orderBias : -1500 + index;
     }
     if (token.includes("bottom") || token.includes("after")) {
-      return 3500 + index;
+      return isDesktopLike ? 260 + orderBias : 3500 + index;
+    }
+    if (token.includes("both")) {
+      return isDesktopLike ? 255 + orderBias : 3550 + index;
     }
   }
 
-  return 2000 + index;
+  return isDesktopLike ? 250 + orderBias : 2000 + index;
 }
 
 function buildCombinedEntries(
+  context: RuntimePreviewContext,
   systemEntries: RuntimePreviewEntry[],
   shellTopEntries: Array<{ entry: RuntimePreviewEntry; hint: number; order: number }>,
 ): RuntimePreviewEntry[] {
@@ -621,30 +901,185 @@ function buildCombinedEntries(
   for (let index = 0; index < systemEntries.length; index += 1) {
     combined.push({
       entry: systemEntries[index],
-      hint: index,
+      hint: getSystemOrderHint(context, systemEntries[index].title, index),
       order: index,
     });
   }
 
   combined.push(...shellTopEntries);
   combined.sort((a, b) => (a.hint === b.hint ? a.order - b.order : a.hint - b.hint));
-  return combined.map((item) => item.entry);
+  const dedupedCombined: Array<{ entry: RuntimePreviewEntry; hint: number; order: number }> = [];
+  const titleIndex = new Map<string, number>();
+  for (const item of combined) {
+    if (item.entry.kind === "separator") {
+      dedupedCombined.push(item);
+      continue;
+    }
+    const key = normalizeToken(item.entry.title);
+    if (!key) {
+      dedupedCombined.push(item);
+      continue;
+    }
+    const existingIndex = titleIndex.get(key);
+    if (existingIndex === undefined) {
+      titleIndex.set(key, dedupedCombined.length);
+      dedupedCombined.push(item);
+      continue;
+    }
+    const existing = dedupedCombined[existingIndex];
+    const shouldReplace = existing.entry.source === "system" && item.entry.source === "shell";
+    if (shouldReplace) {
+      dedupedCombined[existingIndex] = item;
+    }
+  }
+  const desktopLike = context.locationType === "desktop" || context.locationType === "back";
+
+  const staged: RuntimePreviewEntry[] = [];
+  const pushSeparator = (seed: string, source: RuntimePreviewEntry["source"]) => {
+    const prev = staged[staged.length - 1];
+    if (prev?.kind === "separator") {
+      return;
+    }
+    staged.push({
+      id: `combined-sep-${seed}`,
+      kind: "separator",
+      title: "separator",
+      source,
+    });
+  };
+
+  for (let index = 0; index < dedupedCombined.length; index += 1) {
+    const current = dedupedCombined[index];
+    const next = dedupedCombined[index + 1];
+
+    if (current.entry.separatorBefore) {
+      pushSeparator(`before-${index}`, current.entry.source);
+    }
+
+    staged.push(current.entry);
+
+    const gapNeedsSeparator = desktopLike && next && next.hint - current.hint >= 50;
+    if (current.entry.separatorAfter || gapNeedsSeparator) {
+      pushSeparator(`after-${index}`, current.entry.source);
+    }
+  }
+
+  const normalized: RuntimePreviewEntry[] = [];
+  for (const entry of staged) {
+    if (entry.kind === "separator" && normalized.length === 0) {
+      continue;
+    }
+    const prev = normalized[normalized.length - 1];
+    if (entry.kind === "separator" && prev?.kind === "separator") {
+      continue;
+    }
+    normalized.push(entry);
+  }
+  if (normalized[normalized.length - 1]?.kind === "separator") {
+    normalized.pop();
+  }
+  return normalized;
+}
+
+function normalizeRuntimeSystemMenuEntries(
+  entries: RuntimeSystemMenuEntry[] | undefined,
+): RuntimeSystemMenuEntry[] | undefined {
+  if (!entries) {
+    return undefined;
+  }
+
+  const normalized: RuntimeSystemMenuEntry[] = [];
+  for (const entry of entries) {
+    const title = stripQuotes(String(entry.title ?? "")).trim();
+    if (!title) {
+      continue;
+    }
+    const children = normalizeRuntimeSystemMenuEntries(entry.children) ?? [];
+    normalized.push({
+      title,
+      submenu: Boolean(entry.submenu),
+      children,
+    });
+  }
+  return normalized;
+}
+
+function toRuntimeSystemChildren(
+  entries: RuntimeSystemMenuEntry[],
+  parentId: string,
+): RuntimePreviewEntry[] {
+  const out: RuntimePreviewEntry[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const id = `${parentId}-child-${index}`;
+    const nested = toRuntimeSystemChildren(entry.children ?? [], id);
+    const hasChildren = nested.length > 0;
+    out.push({
+      id,
+      kind: hasChildren ? "menu" : "item",
+      title: entry.title,
+      source: "system",
+      submenu: Boolean(entry.submenu) || hasChildren,
+      children: hasChildren ? nested : undefined,
+    });
+  }
+  return out;
 }
 
 function applyRulesToSystemItems(
   context: RuntimePreviewContext,
   rules: Array<Extract<ConfigNode, { kind: "modify" | "remove" }>>,
 ): { entries: RuntimePreviewEntry[]; removedItems: number; modifiedItems: number } {
-  const baseTitles = DEFAULT_SYSTEM_ITEMS[context.locationType] ?? [];
-  const states: SystemItemState[] = baseTitles.map((title, index) => ({
-    id: `system-${index}`,
-    title,
-    index,
-    orderHint: index,
-    hidden: false,
-    labelOnly: false,
-    menuGroup: "",
-  }));
+  const baseMenuEntries = context.systemMenuEntries ?? [];
+  const overrideTitles = (context.systemItemsOverride ?? [])
+    .map((item) => stripQuotes(item).trim())
+    .filter((item) => item.length > 0);
+  const useOverrides = Array.isArray(context.systemItemsOverride);
+  const baseTitles = useOverrides
+    ? [...new Set(overrideTitles)]
+    : DEFAULT_SYSTEM_ITEMS[context.locationType] ?? [];
+
+  const states: SystemItemState[] =
+    baseMenuEntries.length > 0
+      ? baseMenuEntries.map((entry, index) => {
+          const children = toRuntimeSystemChildren(entry.children ?? [], `system-${index}`);
+          return {
+            id: `system-${index}`,
+            title: entry.title,
+            index,
+            orderHint: getSystemOrderHint(context, entry.title, index),
+            hidden: false,
+            labelOnly: false,
+            disabled: false,
+            submenu: Boolean(entry.submenu) || children.length > 0 || isSystemSubmenuTitle(context, entry.title),
+            children,
+            menuGroup: "",
+          };
+        })
+      : baseTitles.map((title, index) => ({
+          id: `system-${index}`,
+          title,
+          index,
+          orderHint: getSystemOrderHint(context, title, index),
+          hidden: false,
+          labelOnly: false,
+          disabled: false,
+          submenu: isSystemSubmenuTitle(context, title),
+          children: [],
+          menuGroup: "",
+        }));
+
+  if (!context.clipboardHasContent) {
+    for (const item of states) {
+      const key = normalizeToken(item.title);
+      if (key === "paste") {
+        item.disabled = true;
+      }
+      if (key === "undo copy") {
+        item.hidden = true;
+      }
+    }
+  }
 
   let removedItems = 0;
   let modifiedItems = 0;
@@ -673,12 +1108,13 @@ function applyRulesToSystemItems(
 
       const title = getAttributeText(rule, "title");
       if (title) {
-        item.title = stripQuotes(title);
+        item.title = resolveDisplayText(title);
+        item.submenu = item.children.length > 0 || isSystemSubmenuTitle(context, item.title);
       }
 
       const menu = getAttributeText(rule, "menu");
       if (menu) {
-        item.menuGroup = stripQuotes(menu);
+        item.menuGroup = resolveDisplayText(menu);
       }
 
       const position = getAttributeText(rule, "pos") || getAttributeText(rule, "position");
@@ -695,6 +1131,9 @@ function applyRulesToSystemItems(
         if (KNOWN_VIS_LABEL.has(vis)) {
           item.labelOnly = true;
         }
+        if (KNOWN_VIS_DISABLED.has(vis)) {
+          item.disabled = true;
+        }
       }
     }
   }
@@ -707,12 +1146,16 @@ function applyRulesToSystemItems(
   const directItems: RuntimePreviewEntry[] = [];
 
   for (const item of visible) {
+    const hasChildren = item.children.length > 0;
     const entry: RuntimePreviewEntry = {
       id: item.id,
-      kind: "item",
+      kind: hasChildren ? "menu" : "item",
       title: item.title,
       source: "system",
       labelOnly: item.labelOnly,
+      disabled: item.disabled,
+      submenu: item.submenu || hasChildren,
+      children: hasChildren ? item.children : undefined,
     };
     if (!item.menuGroup) {
       directItems.push(entry);
@@ -747,6 +1190,18 @@ export function buildRuntimePreview(
     ...context,
     selectionCount: clampedSelectionCount,
     selectionName: context.selectionName.trim() || getDefaultSelectionName(context.locationType),
+    clipboardHasContent: Boolean(context.clipboardHasContent),
+    systemItemsOverride: context.systemItemsOverride
+      ? context.systemItemsOverride
+          .map((item) => stripQuotes(item).trim())
+          .filter((item) => item.length > 0)
+      : undefined,
+    systemSubmenuTitles: context.systemSubmenuTitles
+      ? context.systemSubmenuTitles
+          .map((item) => stripQuotes(item).trim())
+          .filter((item) => item.length > 0)
+      : undefined,
+    systemMenuEntries: normalizeRuntimeSystemMenuEntries(context.systemMenuEntries),
   };
 
   const ruleCollection = collectRules(document.nodes, normalizedContext);
@@ -760,14 +1215,14 @@ export function buildRuntimePreview(
       }
       return {
         entry,
-        hint: computeShellTopLevelHint(node, index),
+        hint: computeShellTopLevelHint(node, index, normalizedContext),
         order: 10000 + index,
       };
     })
     .filter((item): item is { entry: RuntimePreviewEntry; hint: number; order: number } => Boolean(item));
 
   const shellEntries = shellTopEntries.map((item) => item.entry);
-  const combinedEntries = buildCombinedEntries(system.entries, shellTopEntries);
+  const combinedEntries = buildCombinedEntries(normalizedContext, system.entries, shellTopEntries);
 
   return {
     systemEntries: system.entries,
