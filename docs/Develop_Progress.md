@@ -2,6 +2,7 @@
 
 > 本文件用于配合 `docs/Develop_Plan.md` 执行分阶段开发。  
 > 更新原则：每完成一个阶段，必须同步更新“已完成工作”和“下一阶段工作”。
+> 强制规范：渲染结果严格遵循 `docs/Develop_Plan.md` 第 3.1 节，禁止 mock 数据回退。
 
 ## 1. 总览看板
 
@@ -13,6 +14,7 @@
 | 阶段 3 | 可视化编辑器 | Done | 2026-02-07 | 2026-02-07 |
 | 阶段 4 | 发布闭环（规则、Diff、备份、回滚、应用） | Done | 2026-02-07 | 2026-02-07 |
 | 阶段 5 | 稳定性测试与交付 | In Progress | 2026-02-07 | - |
+| 阶段 6 | 真实菜单一致性收敛 | Not Started | - | - |
 
 状态取值约定：
 1. `Not Started`：未开始。
@@ -164,7 +166,6 @@
   - 补充阶段 5 文档产出：
     - 测试用例清单：`docs/Stage5_Test_Cases.md`
     - 测试报告：`docs/Stage5_Test_Report.md`
-    - 手工测试记录模板：`docs/Stage5_Manual_Test_Record.md`
     - 使用手册：`docs/User_Manual.md`
     - 已知问题：`docs/Known_Issues.md`
   - 完成 Windows 打包链路验证：
@@ -203,12 +204,29 @@
     - 输出改为“系统/三方 + shell”合并后的最终菜单预览（单栏）
     - 读取 import 文件时禁用缺失文件自动创建，避免预览副作用
     - 增加来源标签与场景引导：明确区分系统/三方与 shell.nss，且在“当前上下文未命中 shell”时给出可执行提示
-  - 完成高效调试模式（renderer-only）：
-    - 新增 mock preload API：`src/mock/mock-shell-manager-api.ts`
-    - `npm run dev:renderer` 下无 Electron 也可读取 `res/*.nss`、预览、保存、回滚（mock）
-    - `npm run dev` 升级为 Vite HMR + Electron 自动重启（`electronmon`）
-- 下一阶段应完成工作：
-  - 增补真实右键场景手工回归记录（文件/文件夹/桌面/多选）。
-  - 补全文件占用冲突手工测试记录（结合可重试路径）。
-  - 补充安装包安装/覆盖安装/卸载手工验证记录。
-  - 工程化收尾（签名、图标、发行元数据）。
+  - 完成真实系统渲染链路重构（禁止 mock 数据）：
+    - 渲染层移除 mock 回退，仅读取 preload 真实 API。
+    - 新增系统菜单快照 IPC：`system-menu:get-snapshot`。
+    - 新增注册表读取链路（`shell/shellex/CommandStore`）：`electron/system-menu-registry.ts`。
+    - 新增 COM 运行时菜单探测（含子菜单层级）：`electron/scripts/context-menu-probe.ps1`。
+    - 预览合并逻辑支持系统树形菜单注入与去重，改进与实机一致性。
+  - 完成桌面右键菜单第一轮差异收敛（基于 `res/desktop.png`）：
+    - 对齐核心主项：`View / Sort by / Refresh / Paste / Terminal / File manage / Go To / NVIDIA / New / Display settings / Personalize`。
+    - 对齐关键分组与分隔线位置（系统项 + shell.nss 合并渲染）。
+    - 去除实机未展示的噪音项（如 Spotlight/Properties 等场景不一致项）。
+- 下一阶段（阶段 6）应完成工作：
+  - 继续按真实截图和实机结果做差异收敛（每轮迭代输出“差异清单”）。
+  - 强化 `View/Sort by/New` 等子菜单层级与状态一致性。
+  - 扩展 `CommandStore` + COM 覆盖范围，减少遗漏系统项。
+  - 固化自动化对比脚本输出，作为版本回归基线。
+
+## 3. 本轮工作总结（2026-02-08）
+
+1. 解析器与校验器能力升级到真实配置可用级别，并通过 `res/*.nss` 批量验证。
+2. UI 功能闭环完善：文件选择读取、Diff、备份回滚、应用配置、i18n（中英文）。
+3. 预览引擎从“模拟为主”升级到“真实系统配置读取 + shell 规则合并”。
+4. 系统菜单真实数据源已接入：
+   - 注册表：`shell/shellex/CommandStore`
+   - COM 运行时探测：`IContextMenu` 系列（含子菜单）
+5. 已执行并落实强制规范：禁止 mock 数据用于渲染结果；真实数据读取失败时只显示错误/空态，不回退静态 mock 菜单。
+6. 已建立阶段对比方式：每阶段开发完成后，基于 `res/desktop.png` 与当前渲染结果进行差异分析并记录。
