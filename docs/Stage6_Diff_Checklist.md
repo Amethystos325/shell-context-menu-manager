@@ -25,6 +25,14 @@
 14. 自动策略与回归：
    - `npm run stage6:autoplan -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
    - `npm run stage6:regress -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+15. 实机截图（自动触发右键菜单）：
+   - `npm run stage6:real-capture -- --out artifacts/stage6/desktop-live.png --trigger-mode keyboard --capture-mode screen`
+16. 实机截图回归门禁：
+   - `npm run stage6:real-regress -- --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+   - 严格阈值默认值：`missing/extra/order/submenu/disabled` 均为 `0`
+   - 可选放宽阈值：`--max-missing N --max-extra N --max-order N --max-submenu N --max-disabled N`
+17. 实机截图 + 全链路回归（可选）：
+   - `npm run stage6:real-regress -- --full --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
 
 ## 2. 对比维度
 
@@ -150,3 +158,25 @@
 1. 新增视觉提取、视觉对比、自动策略、一键回归四个脚本，形成阶段 6 闭环。
 2. 视觉提取升级为“文本 OCR + 像素启发式”混合策略，补充 `submenu/disabled/separator` 判定信号。
 3. 将 `stage6:regress` 作为阶段 6 当前推荐验收入口。
+
+## 10. 第八轮脚本输出（实机截图自动化）
+
+执行命令：
+1. `npm run stage6:real-capture -- --out artifacts/stage6/desktop-live.png --trigger-mode keyboard --capture-mode screen`
+2. `npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+3. `npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop" --max-missing 2 --max-extra 1 --max-order 4`
+
+结果：
+1. 实机截图：
+   - 自动触发桌面右键菜单并落盘 `artifacts/stage6/desktop-live.png`
+   - 本轮样本截图中可稳定提取核心项：`View/Sort by/Refresh/Terminal/File manage/Go To/Paste/New`
+2. 实机回归（严格阈值）：
+   - 结果为 `FAIL`（按预期拦截）
+   - 主要差异：`missing=2`（`Display settings`、`Personalize`）、`extra=1`（`Undo Delete Ctrl+Z`）、`order=4`
+3. 实机回归（放宽阈值）：
+   - 结果为 `OK`（阈值命中）
+
+本轮收敛动作：
+1. 新增实机截图脚本 `electron/scripts/context-menu-capture.ps1` 与 CLI 包装 `scripts/stage6-real-capture.ts`。
+2. 新增实机回归编排 `scripts/stage6-real-regress.ts`，默认执行视觉门禁（`visual-diff + autoplan`），可选 `--full` 执行全链路回归。
+3. 新增触发策略与稳定性选项：`--trigger-mode`、`--capture-mode`、阈值参数（`--max-*`）。

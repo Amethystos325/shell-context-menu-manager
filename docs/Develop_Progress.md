@@ -272,6 +272,30 @@
   - 完成阶段 6 第七轮视觉提取增强：
     - `scripts/stage6-visual-lib.ts` 从文本 OCR 解析升级为“文本 + 像素启发式”混合提取（submenu/disabled/separator）。
     - 保持 `stage6:visual-diff` 与 `stage6:regress` 通过，作为当前默认视觉回归链路。
+  - 完成阶段 6 第八轮第一阶段“实机自动截图器”：
+    - 新增实机截图脚本：`electron/scripts/context-menu-capture.ps1`（Win32 自动右键 + `#32768` 菜单窗口定位 + 区域截图）。
+    - 新增截图 CLI 包装：`scripts/stage6-real-capture.ts`。
+    - 已完成可执行验证：
+      - `npx tsx scripts/stage6-real-capture.ts --dry-run`
+      - `npx tsx scripts/stage6-real-capture.ts --out artifacts/stage6/desktop-live.png --timeout-ms 4000`
+      - 输出示例：`menu=368x495`，截图已落盘到 `artifacts/stage6/desktop-live.png`。
+  - 完成阶段 6 第八轮第二阶段“一键实机截图回归”：
+    - 新增编排脚本：`scripts/stage6-real-regress.ts`。
+    - 新增 npm 命令：
+      - `npm run stage6:real-capture`
+      - `npm run stage6:real-regress`
+    - 实机触发策略增强：
+      - `context-menu-capture.ps1` 新增 `TriggerMode`（`auto/right-click/keyboard`）。
+      - `FocusDesktop` 从 `Win + D` 调整为 `Win + M`，降低窗口切换干扰。
+      - 默认采样点调整到屏幕右侧空白区，降低桌面图标 OCR 噪声。
+    - 回归门禁策略：
+      - 默认执行：`capture + stage6-visual-diff(--json) + stage6-autoplan`。
+      - 可选 `--full` 执行全链路 `stage6:regress`。
+      - 支持阈值参数：`--max-missing/--max-extra/--max-order/--max-submenu/--max-disabled`。
+    - 已完成实机验证：
+      - 严格模式：`npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen ...`（按预期失败并输出差异明细）。
+      - 阈值模式：`npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen --max-missing 2 --max-extra 1 --max-order 4 ...`（通过）。
+      - 工程检查：`npm run lint`、`npm run typecheck` 通过。
 - 下一轮应完成工作：
   - 将视觉对比从单图扩展到多场景批处理（desktop/file/dir/back），输出聚合报告。
   - 补充视觉基线与误差阈值文档（包含 OCR 质量下限与失败处理策略）。

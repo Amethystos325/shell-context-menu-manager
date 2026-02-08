@@ -25,6 +25,8 @@
     "stage6:visual-diff": "tsx scripts/stage6-visual-diff.ts",
     "stage6:autoplan": "tsx scripts/stage6-autoplan.ts",
     "stage6:regress": "tsx scripts/stage6-regress.ts",
+    "stage6:real-capture": "tsx scripts/stage6-real-capture.ts",
+    "stage6:real-regress": "tsx scripts/stage6-real-regress.ts",
     "stage5:hardening": "tsx scripts/stage5-hardening.ts",
     "package:win:dir": "npm run build && electron-builder --win dir --x64",
     "package:win": "npm run build && electron-builder --win nsis --x64",
