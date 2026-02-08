@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { BackupService } from "./backup-service.js";
 import { Logger } from "./logger.js";
+import { readSystemMenuSnapshot } from "./system-menu-registry.js";
 import { AppError, ERROR_CODES, type ErrorCode } from "../src/shared/error-codes.js";
 import {
   IPC_CHANNELS,
@@ -16,6 +17,8 @@ import {
   type IpcResult,
   type ListBackupsInput,
   type ListBackupsOutput,
+  type SystemMenuSnapshotInput,
+  type SystemMenuSnapshotOutput,
   type ReadTextFileInput,
   type ReadTextFileOutput,
   type SelectTextFileInput,
@@ -291,6 +294,29 @@ function registerIpcHandlers(): void {
     logger?.log("info", "App info requested by renderer.");
     return ok(info);
   });
+
+  ipcMain.handle(
+    IPC_CHANNELS.SYSTEM_MENU_GET_SNAPSHOT,
+    async (_, input: SystemMenuSnapshotInput): Promise<IpcResult<SystemMenuSnapshotOutput>> => {
+      try {
+        assertObject(input);
+        const snapshot = await readSystemMenuSnapshot(
+          input.locationType,
+          Boolean(input.shiftKey),
+          typeof input.samplePath === "string" ? input.samplePath : "",
+        );
+        logger?.log(
+          "info",
+          `System menu snapshot loaded: ${input.locationType} (${snapshot.entries.length} entries)`,
+        );
+        return ok(snapshot);
+      } catch (error) {
+        const ipcError = toIpcError(error, ERROR_CODES.READ_FAIL);
+        logger?.log("error", `System menu snapshot failed: ${ipcError.code} ${ipcError.message}`);
+        return fail(ipcError);
+      }
+    },
+  );
 
   ipcMain.handle(
     IPC_CHANNELS.FILE_SELECT_TEXT,

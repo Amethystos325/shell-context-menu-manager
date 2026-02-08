@@ -3,6 +3,7 @@ import type { ErrorCode } from "./error-codes.js";
 export const IPC_CHANNELS = {
   APP_GET_INFO: "app:get-info",
   APP_APPLY_CONFIG: "app:apply-config",
+  SYSTEM_MENU_GET_SNAPSHOT: "system-menu:get-snapshot",
   FILE_SELECT_TEXT: "file:select-text",
   FILE_READ_TEXT: "file:read-text",
   FILE_WRITE_TEXT: "file:write-text",
@@ -90,6 +91,27 @@ export interface ApplyConfigOutput {
   success: boolean;
   message: string;
   manualSteps?: string[];
+}
+
+export type PreviewLocationType = "desktop" | "file" | "dir" | "drive" | "back" | "taskbar";
+
+export interface SystemMenuSnapshotInput {
+  locationType: PreviewLocationType;
+  shiftKey?: boolean;
+  samplePath?: string;
+}
+
+export interface SystemMenuEntry {
+  title: string;
+  submenu: boolean;
+  source: "shell" | "shellex" | "runtime-com";
+  registryKey: string;
+  children?: SystemMenuEntry[];
+}
+
+export interface SystemMenuSnapshotOutput {
+  locationType: PreviewLocationType;
+  entries: SystemMenuEntry[];
 }
 
 export interface LogEntry {

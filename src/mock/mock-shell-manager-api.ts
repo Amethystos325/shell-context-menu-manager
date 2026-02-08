@@ -9,6 +9,8 @@ import type {
   RestoreBackupOutput,
   SelectTextFileInput,
   SelectTextFileOutput,
+  SystemMenuSnapshotInput,
+  SystemMenuSnapshotOutput,
   WriteTextFileInput,
   WriteTextFileOutput,
 } from "../shared/ipc.js";
@@ -199,6 +201,13 @@ export function getMockShellManagerApi(): ShellManagerApi {
         commandTried: "mock-apply",
         success: true,
         message: "Mock apply succeeded.",
+      };
+    },
+
+    async getSystemMenuSnapshot(input: SystemMenuSnapshotInput): Promise<SystemMenuSnapshotOutput> {
+      return {
+        locationType: input.locationType,
+        entries: [],
       };
     },
 

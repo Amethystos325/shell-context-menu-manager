@@ -8,6 +8,8 @@ import type {
   ReadTextFileOutput,
   SelectTextFileInput,
   SelectTextFileOutput,
+  SystemMenuSnapshotInput,
+  SystemMenuSnapshotOutput,
   RestoreBackupInput,
   RestoreBackupOutput,
   ListBackupsInput,
@@ -18,6 +20,7 @@ import type {
 export interface ShellManagerApi {
   getAppInfo: () => Promise<AppInfo>;
   applyConfig: (input: ApplyConfigInput) => Promise<ApplyConfigOutput>;
+  getSystemMenuSnapshot: (input: SystemMenuSnapshotInput) => Promise<SystemMenuSnapshotOutput>;
   selectTextFile: (input?: SelectTextFileInput) => Promise<SelectTextFileOutput | null>;
   readTextFile: (input: ReadTextFileInput) => Promise<ReadTextFileOutput>;
   writeTextFile: (input: WriteTextFileInput) => Promise<WriteTextFileOutput>;

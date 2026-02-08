@@ -10,6 +10,8 @@ import {
   type ReadTextFileOutput,
   type SelectTextFileInput,
   type SelectTextFileOutput,
+  type SystemMenuSnapshotInput,
+  type SystemMenuSnapshotOutput,
   type RestoreBackupOutput,
   type WriteTextFileOutput,
 } from "../src/shared/ipc.js";
@@ -42,6 +44,18 @@ const api: ShellManagerApi = {
       ...input,
       targetPath,
     })) as IpcResult<ApplyConfigOutput>;
+    return unwrapIpcResult(result);
+  },
+  async getSystemMenuSnapshot(input) {
+    const payload: SystemMenuSnapshotInput = {
+      locationType: input.locationType,
+      shiftKey: Boolean(input.shiftKey),
+      samplePath: typeof input.samplePath === "string" ? input.samplePath : undefined,
+    };
+    const result = (await ipcRenderer.invoke(
+      IPC_CHANNELS.SYSTEM_MENU_GET_SNAPSHOT,
+      payload,
+    )) as IpcResult<SystemMenuSnapshotOutput>;
     return unwrapIpcResult(result);
   },
   async selectTextFile(input = {}) {
