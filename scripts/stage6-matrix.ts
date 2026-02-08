@@ -39,7 +39,10 @@ function runCase(testCase: MatrixCase): { ok: boolean; output: string } {
   const extra = parseCount(output, "extra");
   const order = parseCount(output, "order-mismatch");
   const submenu = parseCount(output, "submenu-mismatch");
-  const ok = [missing, extra, order, submenu].every((value) => Number.isFinite(value) && value === 0);
+  const disabled = parseCount(output, "disabled-mismatch");
+  const ok = [missing, extra, order, submenu, disabled].every(
+    (value) => Number.isFinite(value) && value === 0,
+  );
   return { ok, output };
 }
 

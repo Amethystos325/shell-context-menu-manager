@@ -17,6 +17,7 @@ type DiffMode = "snapshot" | "combined";
 interface BaselineEntry {
   title: string;
   submenu?: boolean;
+  disabled?: boolean;
 }
 
 interface BaselineDocument {
@@ -39,6 +40,7 @@ interface CompareSummary {
   extraTitles: string[];
   orderMismatches: Array<{ title: string; expectedIndex: number; actualIndex: number }>;
   submenuMismatches: Array<{ title: string; expectedSubmenu: boolean; actualSubmenu: boolean }>;
+  disabledMismatches: Array<{ title: string; expectedDisabled: boolean; actualDisabled: boolean }>;
 }
 
 interface CliArgs {
@@ -63,6 +65,10 @@ function normalizeBaselineEntries(entries: unknown): BaselineEntry[] {
         (entry as BaselineEntry).submenu === undefined
           ? undefined
           : Boolean((entry as BaselineEntry).submenu),
+      disabled:
+        (entry as BaselineEntry).disabled === undefined
+          ? undefined
+          : Boolean((entry as BaselineEntry).disabled),
     }))
     .filter((entry) => entry.title.length > 0);
 }
@@ -153,6 +159,7 @@ function toTopLevelSystem(entries: SystemMenuEntry[]): BaselineEntry[] {
     .map((entry) => ({
       title: entry.title.trim(),
       submenu: entry.submenu,
+      disabled: Boolean(entry.disabled),
     }))
     .filter((entry) => entry.title.length > 0);
 }
@@ -163,8 +170,33 @@ function toTopLevelPreview(entries: RuntimePreviewEntry[]): BaselineEntry[] {
     .map((entry) => ({
       title: entry.title.trim(),
       submenu: entry.kind === "menu" || Boolean(entry.submenu),
+      disabled: Boolean(entry.disabled),
     }))
     .filter((entry) => entry.title.length > 0);
+}
+
+function findRuntimeSystemEntryByTitle(
+  entries: RuntimeSystemMenuEntry[],
+  title: string,
+): RuntimeSystemMenuEntry | null {
+  const target = normalizeTitle(title);
+  if (!target) {
+    return null;
+  }
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+    if (normalizeTitle(current.title) === target) {
+      return current;
+    }
+    if (current.children && current.children.length > 0) {
+      queue.push(...current.children);
+    }
+  }
+  return null;
 }
 
 function toRuntimeSystemMenuEntries(entries: SystemMenuEntry[]): RuntimeSystemMenuEntry[] {
@@ -258,6 +290,7 @@ async function loadCombinedTopLevelEntries(
 
   const mergedDocument = await resolveDocumentWithImports(parsed.document, configPath);
   const runtimeSystemEntries = toRuntimeSystemMenuEntries(snapshotEntries);
+  const pasteEntry = findRuntimeSystemEntryByTitle(runtimeSystemEntries, "Paste");
 
   const context: RuntimePreviewContext = {
     locationType: baseline.locationType,
@@ -271,7 +304,8 @@ async function loadCombinedTopLevelEntries(
     leftButton: false,
     hasAdmin: false,
     backgroundMode: baseline.locationType === "desktop" || baseline.locationType === "back",
-    clipboardHasContent: false,
+    clipboardHasContent:
+      pasteEntry && typeof pasteEntry.disabled === "boolean" ? !pasteEntry.disabled : false,
     currentPath: samplePath.trim() || undefined,
     systemMenuEntries: runtimeSystemEntries,
   };
@@ -373,6 +407,26 @@ function compareMenus(
     }
   }
 
+  const disabledMismatches: Array<{ title: string; expectedDisabled: boolean; actualDisabled: boolean }> = [];
+  for (const entry of expected) {
+    if (entry.disabled === undefined) {
+      continue;
+    }
+    const key = normalizeTitle(entry.title);
+    const actualEntry = actualMap.get(key);
+    if (!actualEntry) {
+      continue;
+    }
+    const actualDisabled = Boolean(actualEntry.disabled);
+    if (actualDisabled !== entry.disabled) {
+      disabledMismatches.push({
+        title: entry.title,
+        expectedDisabled: entry.disabled,
+        actualDisabled,
+      });
+    }
+  }
+
   return {
     expectedCount: expectedMap.size,
     actualCount: actualMap.size,
@@ -380,6 +434,7 @@ function compareMenus(
     extraTitles,
     orderMismatches,
     submenuMismatches,
+    disabledMismatches,
   };
 }
 
@@ -445,6 +500,16 @@ async function run(): Promise<void> {
     for (const mismatch of summary.submenuMismatches) {
       console.log(
         `  - ${mismatch.title}: expected submenu=${mismatch.expectedSubmenu}, actual submenu=${mismatch.actualSubmenu}`,
+      );
+    }
+  }
+  if (summary.disabledMismatches.length === 0) {
+    console.log("disabled-mismatch(0): -");
+  } else {
+    console.log(`disabled-mismatch(${summary.disabledMismatches.length}):`);
+    for (const mismatch of summary.disabledMismatches) {
+      console.log(
+        `  - ${mismatch.title}: expected disabled=${mismatch.expectedDisabled}, actual disabled=${mismatch.actualDisabled}`,
       );
     }
   }

@@ -112,6 +112,28 @@ const DESKTOP_ORDER_HINTS: Record<string, number> = {
   personalize: 470,
 };
 
+const DESKTOP_FALLBACK_KEYS = new Set([
+  "view",
+  "sort by",
+  "refresh",
+  "paste",
+  "new",
+  "display settings",
+  "personalize",
+  "nvidia app",
+  "nvidia control panel",
+]);
+
+const BACKGROUND_FALLBACK_KEYS = new Set([
+  "view",
+  "sort by",
+  "group by",
+  "refresh",
+  "paste",
+  "new",
+  "properties",
+]);
+
 function getPowerShellPath(): string {
   return process.env.windir
     ? path.join(process.env.windir, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
@@ -417,6 +439,18 @@ function normalizeRegistryTitle(raw: string, fallback: string): string {
 
 function normalizeEntryKey(title: string): string {
   return title.trim().toLowerCase();
+}
+
+function collectTopLevelTitleKeys(entries: SystemMenuEntry[]): Set<string> {
+  const keys = new Set<string>();
+  for (const entry of entries) {
+    const key = normalizeEntryKey(entry.title);
+    if (!key) {
+      continue;
+    }
+    keys.add(key);
+  }
+  return keys;
 }
 
 function getDesktopOrderHint(title: string, fallbackIndex: number): number {
@@ -1013,20 +1047,50 @@ export async function readSystemMenuSnapshot(
   const runtimeEntries = await runRuntimeProbe(locationType, shiftKey, samplePath);
   const shellEntryGroups = await Promise.all(roots.shell.map((root) => readShellEntries(root, shiftKey)));
   const shellexEntryGroups = await Promise.all(roots.shellex.map((root) => readShellexEntries(root, shiftKey)));
+  const desktopBackgroundRoots = locationType === "desktop" ? REGISTRY_ROOTS.back : null;
+  const desktopBackgroundShellGroups =
+    locationType === "desktop" && desktopBackgroundRoots
+      ? await Promise.all(desktopBackgroundRoots.shell.map((root) => readShellEntries(root, shiftKey)))
+      : [];
+  const desktopBackgroundShellexGroups =
+    locationType === "desktop" && desktopBackgroundRoots
+      ? await Promise.all(desktopBackgroundRoots.shellex.map((root) => readShellexEntries(root, shiftKey)))
+      : [];
   const commandStoreEntries =
     locationType === "desktop" || locationType === "back" ? await readCommandStoreDesktopEntries() : [];
   const desktopExtraEntries = locationType === "desktop" ? await readDesktopExtraNvidiaEntries(shiftKey) : [];
-  const merged = dedupeEntries([
-    ...runtimeEntries,
-    ...commandStoreEntries,
+  const metadataEntries = dedupeEntries([
     ...desktopExtraEntries,
+    ...commandStoreEntries,
     ...shellEntryGroups.flat(),
     ...shellexEntryGroups.flat(),
+    ...desktopBackgroundShellGroups.flat(),
+    ...desktopBackgroundShellexGroups.flat(),
   ]);
-  const normalized =
+  const mergedEntries = dedupeEntries([...runtimeEntries, ...metadataEntries]);
+  const baseEntries = mergedEntries;
+  const normalizedList =
     locationType === "desktop"
-      ? merged.map(normalizeDesktopEntryTitle).filter((item): item is SystemMenuEntry => Boolean(item))
-      : merged;
+      ? baseEntries.map(normalizeDesktopEntryTitle).filter((item): item is SystemMenuEntry => Boolean(item))
+      : baseEntries;
+  let normalized = dedupeEntries(normalizedList);
+  if (locationType === "desktop" && runtimeEntries.length > 0) {
+    const runtimeNormalizedKeys = collectTopLevelTitleKeys(
+      runtimeEntries
+        .map(normalizeDesktopEntryTitle)
+        .filter((item): item is SystemMenuEntry => Boolean(item)),
+    );
+    normalized = normalized.filter((entry) => {
+      const key = normalizeEntryKey(entry.title);
+      return runtimeNormalizedKeys.has(key) || DESKTOP_FALLBACK_KEYS.has(key);
+    });
+  } else if (locationType === "back" && runtimeEntries.length > 0) {
+    const runtimeKeys = collectTopLevelTitleKeys(runtimeEntries);
+    normalized = normalized.filter((entry) => {
+      const key = normalizeEntryKey(entry.title);
+      return runtimeKeys.has(key) || BACKGROUND_FALLBACK_KEYS.has(key);
+    });
+  }
   const ordered =
     locationType === "desktop" || locationType === "back"
       ? sortDesktopEntries(normalized)

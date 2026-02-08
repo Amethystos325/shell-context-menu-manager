@@ -26,6 +26,7 @@
 2. `extra`：当前结果新增、且不在 `expected/optional/ignored/optionalPatterns/ignoredPatterns` 内的项。
 3. `order-mismatch`：仅针对 `expected` 项做相对顺序对比（忽略 optional 插入项）。
 4. `submenu-mismatch`：关键项子菜单状态不一致。
+5. `disabled-mismatch`：关键项禁用状态（disabled）不一致。
 
 ## 3. 本轮迭代说明（2026-02-08）
 

@@ -121,6 +121,30 @@ function toRuntimeSystemMenuEntries(entries: SystemMenuEntry[]): RuntimeSystemMe
     .filter((entry) => entry.title.trim().length > 0);
 }
 
+function findRuntimeSystemEntryByTitle(
+  entries: RuntimeSystemMenuEntry[],
+  title: string,
+): RuntimeSystemMenuEntry | null {
+  const target = title.trim().toLowerCase();
+  if (!target) {
+    return null;
+  }
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+    if (current.title.trim().toLowerCase() === target) {
+      return current;
+    }
+    if (current.children && current.children.length > 0) {
+      queue.push(...current.children);
+    }
+  }
+  return null;
+}
+
 function collectRuleNodes(document: ConfigDocument | null): ConfigNode[] {
   if (!document) {
     return [];
@@ -731,12 +755,17 @@ function App() {
         }
       };
       collectSubmenuTitles(runtimeSystemEntries);
+      const pasteEntry = findRuntimeSystemEntryByTitle(runtimeSystemEntries, "Paste");
       setPreviewContext((prev) => ({
         ...prev,
         currentPath: inferPreviewCurrentPath(filePath, prev.locationType),
         systemItemsOverride: runtimeSystemEntries.map((entry) => entry.title),
         systemSubmenuTitles: submenuTitles,
         systemMenuEntries: runtimeSystemEntries,
+        clipboardHasContent:
+          pasteEntry && typeof pasteEntry.disabled === "boolean"
+            ? !pasteEntry.disabled
+            : prev.clipboardHasContent,
       }));
     } catch (error) {
       setSystemMenuEntries([]);
