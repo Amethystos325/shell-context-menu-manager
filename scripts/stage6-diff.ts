@@ -171,6 +171,8 @@ function toRuntimeSystemMenuEntries(entries: SystemMenuEntry[]): RuntimeSystemMe
   return entries
     .map((entry) => ({
       title: entry.title,
+      icon: entry.icon,
+      iconDataUrl: entry.iconDataUrl,
       submenu: entry.submenu,
       disabled: Boolean(entry.disabled),
       children: toRuntimeSystemMenuEntries(entry.children ?? []),

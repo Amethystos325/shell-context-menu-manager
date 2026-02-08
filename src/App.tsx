@@ -112,6 +112,8 @@ function toRuntimeSystemMenuEntries(entries: SystemMenuEntry[]): RuntimeSystemMe
   return entries
     .map((entry) => ({
       title: entry.title,
+      icon: entry.icon,
+      iconDataUrl: entry.iconDataUrl,
       submenu: entry.submenu,
       disabled: Boolean(entry.disabled),
       children: toRuntimeSystemMenuEntries(entry.children ?? []),
@@ -233,6 +235,16 @@ interface SystemMenuSnapshotListProps {
   depth?: number;
 }
 
+function handlePreviewIconImageError(event: React.SyntheticEvent<HTMLImageElement>) {
+  const image = event.currentTarget;
+  image.style.display = "none";
+  image.setAttribute("aria-hidden", "true");
+  const holder = image.parentElement;
+  if (holder) {
+    holder.classList.remove("has-icon");
+  }
+}
+
 function SystemMenuSnapshotList({ entries, disabledText, depth = 0 }: SystemMenuSnapshotListProps) {
   if (entries.length === 0) {
     return null;
@@ -244,6 +256,18 @@ function SystemMenuSnapshotList({ entries, disabledText, depth = 0 }: SystemMenu
         <li key={entry.registryKey}>
           <div className="preview-system-item-row">
             <span className={`preview-source-badge source-${entry.source}`}>{entry.source}</span>
+            <span className={`preview-entry-icon${entry.icon || entry.iconDataUrl ? " has-icon" : ""}`} aria-hidden="true">
+              {entry.iconDataUrl ? (
+                <img
+                  className="preview-entry-icon-image"
+                  src={entry.iconDataUrl}
+                  alt=""
+                  onError={handlePreviewIconImageError}
+                />
+              ) : (
+                entry.icon ?? "\u00A0"
+              )}
+            </span>
             <span>{entry.title}</span>
             {entry.disabled ? (
               <span className="preview-system-state-tag">{disabledText}</span>
@@ -299,6 +323,20 @@ function PreviewTree({
             )}
             <span className={`preview-source-badge source-${entry.source}`}>
               {entry.source === "system" ? systemTagText : shellTagText}
+            </span>
+            <span className={`preview-entry-icon${entry.icon || entry.iconDataUrl ? " has-icon" : ""}`} aria-hidden="true">
+              {entry.kind === "separator" ? (
+                ""
+              ) : entry.iconDataUrl ? (
+                <img
+                  className="preview-entry-icon-image"
+                  src={entry.iconDataUrl}
+                  alt=""
+                  onError={handlePreviewIconImageError}
+                />
+              ) : (
+                entry.icon ?? "\u00A0"
+              )}
             </span>
             <span className="preview-entry-title">
               {entry.kind === "separator" ? "----------" : entry.title}

@@ -19,6 +19,8 @@ export interface RuntimePreviewContext {
 
 export interface RuntimeSystemMenuEntry {
   title: string;
+  icon?: string;
+  iconDataUrl?: string;
   submenu?: boolean;
   disabled?: boolean;
   children?: RuntimeSystemMenuEntry[];
@@ -28,6 +30,8 @@ export interface RuntimePreviewEntry {
   id: string;
   kind: "menu" | "item" | "separator";
   title: string;
+  icon?: string;
+  iconDataUrl?: string;
   source: "system" | "shell";
   labelOnly?: boolean;
   disabled?: boolean;
@@ -67,6 +71,8 @@ interface VisibilityEval extends ConditionEval {
 interface SystemItemState {
   id: string;
   title: string;
+  icon?: string;
+  iconDataUrl?: string;
   index: number;
   orderHint: number;
   hidden: boolean;
@@ -76,6 +82,8 @@ interface SystemItemState {
   children: RuntimePreviewEntry[];
   menuGroup: string;
 }
+
+type ShellIconDataUrlMap = Map<string, string>;
 
 const KNOWN_VIS_HIDDEN = new Set(["hidden", "hide", "vis.hidden"]);
 const KNOWN_VIS_LABEL = new Set(["label", "vis.label"]);
@@ -299,6 +307,262 @@ function resolveDisplayText(rawText: string): string {
   }
 
   return trimmed;
+}
+
+function normalizeImageDataUrl(raw: string): string | undefined {
+  const trimmed = stripQuotes(raw).trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (!/^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(trimmed)) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function normalizeShellSymbolKey(value: string): string {
+  return value.trim().replace(/^[@$]/, "").toLowerCase();
+}
+
+function parseRawStringAssignments(nodes: ConfigNode[]): Map<string, string> {
+  const assignments = new Map<string, string>();
+  const queue = [...nodes];
+  while (queue.length > 0) {
+    const node = queue.shift();
+    if (!node) {
+      continue;
+    }
+    if (node.kind === "menu") {
+      queue.push(...node.children);
+      continue;
+    }
+    if (node.kind !== "raw") {
+      continue;
+    }
+
+    const match = node.text.match(/^\s*([^=]+?)\s*=\s*(['"])([\s\S]*)\2\s*$/);
+    if (!match) {
+      continue;
+    }
+    const left = match[1].trim();
+    const right = match[3];
+    if (!left || !right) {
+      continue;
+    }
+    const names = left
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+    for (const name of names) {
+      const key = normalizeShellSymbolKey(name);
+      if (!key) {
+        continue;
+      }
+      assignments.set(key, right);
+    }
+  }
+  return assignments;
+}
+
+const SHELL_ICON_FALLBACK_TOKENS: Record<string, string> = {
+  "image.color1": "#2563a6",
+  "image.color2": "#2f8a5b",
+  "image.color3": "#ffffff",
+  color3: "none",
+  color_islight_wb: "#ffffff",
+};
+
+function resolveShellTemplateText(
+  key: string,
+  assignments: Map<string, string>,
+  cache: Map<string, string>,
+  visiting: Set<string>,
+): string {
+  const normalized = normalizeShellSymbolKey(key);
+  if (!normalized) {
+    return "";
+  }
+  const cached = cache.get(normalized);
+  if (cached !== undefined) {
+    return cached;
+  }
+  if (visiting.has(normalized)) {
+    return "";
+  }
+  const template = assignments.get(normalized);
+  if (!template) {
+    return "";
+  }
+
+  visiting.add(normalized);
+  const resolved = template.replace(/([@$][A-Za-z0-9_.-]+)/g, (token) => {
+    const tokenKey = normalizeShellSymbolKey(token);
+    if (!tokenKey) {
+      return "";
+    }
+    const known = SHELL_ICON_FALLBACK_TOKENS[tokenKey];
+    if (known !== undefined) {
+      return known;
+    }
+    return resolveShellTemplateText(tokenKey, assignments, cache, visiting);
+  });
+  visiting.delete(normalized);
+  cache.set(normalized, resolved);
+  return resolved;
+}
+
+function toSvgDataUrl(svgText: string): string {
+  const compact = svgText.replace(/\r?\n/g, " ").replace(/\s{2,}/g, " ").trim();
+  return `data:image/svg+xml;utf8,${encodeURIComponent(compact)}`;
+}
+
+function buildShellIconDataUrlMap(document: ConfigDocument): ShellIconDataUrlMap {
+  const assignments = parseRawStringAssignments(document.nodes);
+  if (assignments.size === 0) {
+    return new Map();
+  }
+
+  const cache = new Map<string, string>();
+  const iconMap: ShellIconDataUrlMap = new Map();
+  for (const key of assignments.keys()) {
+    const resolved = resolveShellTemplateText(key, assignments, cache, new Set());
+    if (!resolved || !/<svg[\s>]/i.test(resolved)) {
+      continue;
+    }
+    iconMap.set(key, toSvgDataUrl(resolved));
+  }
+  return iconMap;
+}
+
+function resolveShellIconDataUrl(rawImage: string, iconMap: ShellIconDataUrlMap): string | undefined {
+  const direct = normalizeImageDataUrl(rawImage);
+  if (direct) {
+    return direct;
+  }
+  const normalized = stripQuotes(rawImage).trim();
+  if (!normalized || iconMap.size === 0) {
+    return undefined;
+  }
+
+  const candidates: string[] = [];
+  const lower = normalized.toLowerCase();
+  if (lower.startsWith("icon.")) {
+    const symbol = lower.slice("icon.".length);
+    candidates.push(symbol, symbol.replaceAll(".", "_"), symbol.replaceAll("-", "_"));
+  } else {
+    const plain = normalizeShellSymbolKey(lower);
+    candidates.push(plain);
+    if (plain.startsWith("image.")) {
+      candidates.push(plain.slice("image.".length));
+    }
+  }
+
+  for (const candidate of candidates) {
+    const found = iconMap.get(candidate);
+    if (found) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
+function toUnicodeCharacter(hex: string): string {
+  const codePoint = Number.parseInt(hex, 16);
+  if (!Number.isFinite(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) {
+    return "";
+  }
+  return String.fromCodePoint(codePoint);
+}
+
+function decodeIconEscapes(input: string): string {
+  return input
+    .replace(/\\u\{([0-9a-fA-F]{1,6})\}/g, (_match, hex: string) => toUnicodeCharacter(hex))
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_match, hex: string) => toUnicodeCharacter(hex))
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_match, hex: string) => toUnicodeCharacter(hex))
+    .replace(/\\n/g, " ")
+    .replace(/\\r/g, " ")
+    .replace(/\\t/g, " ")
+    .replace(/\\"/g, "\"")
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, "\\");
+}
+
+function looksLikeIconResource(input: string): boolean {
+  const token = input.trim().toLowerCase();
+  if (!token) {
+    return false;
+  }
+  if (token.includes("\\") || token.includes("/") || token.includes("%") || token.startsWith("@")) {
+    return true;
+  }
+  return /\.(dll|exe|ico|png|svg|bmp|icl|mun)(,[-]?\d+)?$/i.test(token);
+}
+
+function firstVisibleCharacter(input: string): string {
+  for (const char of input) {
+    if (char.trim().length > 0) {
+      return char;
+    }
+  }
+  return "";
+}
+
+function resolveIconToken(rawIcon: string): string | undefined {
+  const trimmed = rawIcon.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (normalizeImageDataUrl(trimmed)) {
+    return undefined;
+  }
+
+  const unicodeEscape = trimmed.match(/\\u\{([0-9a-fA-F]{1,6})\}|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/);
+  if (unicodeEscape) {
+    const hex = unicodeEscape[1] ?? unicodeEscape[2] ?? unicodeEscape[3] ?? "";
+    const glyph = toUnicodeCharacter(hex);
+    if (glyph) {
+      return glyph;
+    }
+  }
+
+  const functionLikeExpression = /[A-Za-z_@][A-Za-z0-9_.@-]*\s*\(/.test(trimmed);
+  const literal = functionLikeExpression ? null : extractFirstQuotedLiteral(trimmed);
+  if (literal) {
+    const literalValue = decodeIconEscapes(literal).trim();
+    if (literalValue) {
+      if (looksLikeIconResource(literalValue) || /^[a-z0-9_. -]{3,}$/i.test(literalValue)) {
+        return undefined;
+      }
+      const literalGlyph = firstVisibleCharacter(literalValue);
+      if (literalGlyph) {
+        return literalGlyph;
+      }
+    }
+  }
+
+  const normalized = decodeIconEscapes(stripQuotes(trimmed)).trim();
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.startsWith("@") && normalized.includes("(")) {
+    return undefined;
+  }
+  const normalizedLower = normalized.toLowerCase();
+  if (
+    normalizedLower === "inherit" ||
+    normalizedLower === "none" ||
+    normalizedLower === "auto" ||
+    normalizedLower === "default"
+  ) {
+    return undefined;
+  }
+  if (looksLikeIconResource(normalized) || /^(icon|image)\./i.test(normalized)) {
+    return undefined;
+  }
+  if (/^[a-z0-9_.-]+$/i.test(normalized) && normalized.length > 2) {
+    return undefined;
+  }
+  return firstVisibleCharacter(normalized) || undefined;
 }
 
 function normalizeToken(input: string): string {
@@ -718,7 +982,11 @@ function parseSeparatorHints(node: AttributedNode): { before: boolean; after: bo
   return { before: false, after: false };
 }
 
-function toShellPreviewNode(node: ConfigNode, context: RuntimePreviewContext): RuntimePreviewEntry | null {
+function toShellPreviewNode(
+  node: ConfigNode,
+  context: RuntimePreviewContext,
+  iconMap: ShellIconDataUrlMap,
+): RuntimePreviewEntry | null {
   if (!isAttributedNode(node)) {
     return null;
   }
@@ -732,10 +1000,13 @@ function toShellPreviewNode(node: ConfigNode, context: RuntimePreviewContext): R
     return null;
   }
   const separatorHints = parseSeparatorHints(node);
+  const rawImage = getAttributeText(node, "image");
+  const iconDataUrl = resolveShellIconDataUrl(rawImage, iconMap);
+  const icon = iconDataUrl ? undefined : resolveIconToken(rawImage);
 
   if (node.kind === "menu") {
     const children = node.children
-      .map((child) => toShellPreviewNode(child, context))
+      .map((child) => toShellPreviewNode(child, context, iconMap))
       .filter((child): child is RuntimePreviewEntry => Boolean(child));
     if (children.length === 0) {
       return null;
@@ -744,6 +1015,8 @@ function toShellPreviewNode(node: ConfigNode, context: RuntimePreviewContext): R
       id: node.id,
       kind: "menu",
       title: titleOfNode(node),
+      icon,
+      iconDataUrl,
       source: "shell",
       labelOnly: visibility.labelOnly,
       disabled: visibility.disabled,
@@ -757,6 +1030,8 @@ function toShellPreviewNode(node: ConfigNode, context: RuntimePreviewContext): R
     id: node.id,
     kind: node.kind,
     title: titleOfNode(node),
+    icon,
+    iconDataUrl,
     source: "shell",
     labelOnly: visibility.labelOnly,
     disabled: visibility.disabled,
@@ -998,6 +1273,8 @@ function normalizeRuntimeSystemMenuEntries(
     const children = normalizeRuntimeSystemMenuEntries(entry.children) ?? [];
     normalized.push({
       title,
+      icon: stripQuotes(String(entry.icon ?? "")).trim() || undefined,
+      iconDataUrl: normalizeImageDataUrl(String(entry.iconDataUrl ?? "")),
       submenu: Boolean(entry.submenu),
       disabled: Boolean(entry.disabled),
       children,
@@ -1020,6 +1297,8 @@ function toRuntimeSystemChildren(
       id,
       kind: hasChildren ? "menu" : "item",
       title: entry.title,
+      icon: resolveIconToken(entry.icon ?? ""),
+      iconDataUrl: normalizeImageDataUrl(entry.iconDataUrl ?? ""),
       source: "system",
       disabled: Boolean(entry.disabled),
       submenu: Boolean(entry.submenu) || hasChildren,
@@ -1049,6 +1328,8 @@ function applyRulesToSystemItems(
           return {
             id: `system-${index}`,
             title: entry.title,
+            icon: resolveIconToken(entry.icon ?? ""),
+            iconDataUrl: normalizeImageDataUrl(entry.iconDataUrl ?? ""),
             index,
             orderHint: getSystemOrderHint(context, entry.title, index),
             hidden: false,
@@ -1062,6 +1343,8 @@ function applyRulesToSystemItems(
       : baseTitles.map((title, index) => ({
           id: `system-${index}`,
           title,
+          icon: undefined,
+          iconDataUrl: undefined,
           index,
           orderHint: getSystemOrderHint(context, title, index),
           hidden: false,
@@ -1120,6 +1403,16 @@ function applyRulesToSystemItems(
         item.menuGroup = resolveDisplayText(menu);
       }
 
+      const imageAttr = getAttribute(rule, "image");
+      if (imageAttr) {
+        const rawImage =
+          imageAttr.value.kind === "string"
+            ? String(imageAttr.value.value)
+            : String(imageAttr.value.raw ?? imageAttr.value.value ?? "");
+        item.iconDataUrl = normalizeImageDataUrl(rawImage);
+        item.icon = resolveIconToken(rawImage);
+      }
+
       const position = getAttributeText(rule, "pos") || getAttributeText(rule, "position");
       if (position) {
         item.orderHint = computeOrderHint(position, item.index);
@@ -1154,6 +1447,8 @@ function applyRulesToSystemItems(
       id: item.id,
       kind: hasChildren ? "menu" : "item",
       title: item.title,
+      icon: item.icon,
+      iconDataUrl: item.iconDataUrl,
       source: "system",
       labelOnly: item.labelOnly,
       disabled: item.disabled,
@@ -1209,10 +1504,11 @@ export function buildRuntimePreview(
 
   const ruleCollection = collectRules(document.nodes, normalizedContext);
   const system = applyRulesToSystemItems(normalizedContext, ruleCollection.activeRules);
+  const shellIconMap = buildShellIconDataUrlMap(document);
 
   const shellTopEntries = document.nodes
     .map((node, index) => {
-      const entry = toShellPreviewNode(node, normalizedContext);
+      const entry = toShellPreviewNode(node, normalizedContext, shellIconMap);
       if (!entry) {
         return null;
       }

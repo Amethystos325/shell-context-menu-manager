@@ -30,11 +30,13 @@ function findEntryByTitle(entries: RuntimePreviewEntry[], title: string): Runtim
 
 function run(): void {
   const source = `
-modify(find="Refresh", menu="System")
+@pin='<svg viewBox="0 0 16 16"><path fill="#ff0000" d="M2 2h12v12H2z"/></svg>'
+modify(find="Refresh", menu="System", image="\\uE72C")
 remove(find="NVIDIA*")
-menu(type='desktop|back' title="Go To") {
+menu(type='desktop|back' title="Go To", image="\\uE8A7") {
   item(title="Open Terminal")
 }
+item(type='desktop' title="Pin Test" image=icon.pin)
 menu(type='file' mode='single' title="File Tools") {
   item(title="Rename Safe")
 }
@@ -59,6 +61,14 @@ menu(vis=key.shift() title="Dev") {
   assert.ok(!desktopSystemTitles.some((title) => title.startsWith("NVIDIA")), "Expected remove rule to hide NVIDIA entries.");
   assert.ok(flattenTitles(desktopPreview.shellEntries).includes("Go To"), "Expected desktop custom menu visible.");
   assert.ok(flattenTitles(desktopPreview.combinedEntries).includes("Go To"), "Expected combined preview to include shell nodes.");
+  assert.equal(findEntryByTitle(desktopPreview.combinedEntries, "Go To")?.icon, "", "Expected shell image glyph icon.");
+  assert.equal(findEntryByTitle(desktopPreview.combinedEntries, "Refresh")?.icon, "", "Expected modify(image=...) to update system icon.");
+  assert.ok(
+    String(findEntryByTitle(desktopPreview.combinedEntries, "Pin Test")?.iconDataUrl ?? "").startsWith(
+      "data:image/svg+xml;utf8,",
+    ),
+    "Expected icon.pin to resolve from raw svg symbol definitions.",
+  );
   assert.ok(!flattenTitles(desktopPreview.shellEntries).includes("Dev"), "Expected vis=key.shift() hidden without Shift.");
   const pasteEntry = findEntryByTitle(desktopPreview.combinedEntries, "Paste");
   assert.ok(pasteEntry?.disabled, "Expected Paste to be disabled when clipboard is empty.");
@@ -100,6 +110,7 @@ menu(vis=key.shift() title="Dev") {
     systemMenuEntries: [
       {
         title: "Refresh",
+        icon: "%SystemRoot%\\system32\\imageres.dll,-5302",
         submenu: false,
         disabled: true,
       },
@@ -113,9 +124,20 @@ menu(vis=key.shift() title="Dev") {
           },
         ],
       },
+      {
+        title: "Paste",
+        iconDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2ZF4wAAAAASUVORK5CYII=",
+        submenu: false,
+      },
     ],
   });
   assert.equal(findEntryByTitle(systemStatePreview.combinedEntries, "Refresh")?.disabled, true);
+  assert.equal(findEntryByTitle(systemStatePreview.combinedEntries, "Refresh")?.icon, "");
+  assert.ok(
+    String(findEntryByTitle(systemStatePreview.combinedEntries, "Paste")?.iconDataUrl ?? "").startsWith(
+      "data:image/png;base64,",
+    ),
+  );
   assert.ok(findEntryByTitle(systemStatePreview.combinedEntries, "Large icons"));
 
   console.log("preview-smoke: OK");

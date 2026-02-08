@@ -573,6 +573,34 @@
   min-width: 0;
 }
 
+.preview-entry-icon {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #4e6479;
+  display: inline-flex;
+  flex: 0 0 18px;
+  font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets", "Segoe UI Symbol", "Segoe UI", sans-serif;
+  font-size: 13px;
+  height: 18px;
+  justify-content: center;
+  margin-right: 6px;
+  width: 18px;
+}
+
+.preview-entry-icon.has-icon {
+  background: #ffffff;
+  border-color: #cadeef;
+  color: #245377;
+}
+
+.preview-entry-icon-image {
+  display: block;
+  height: 16px;
+  object-fit: contain;
+  width: 16px;
+}
+
 .preview-submenu-marker {
   color: #5c6c7d;
   font-weight: 700;
@@ -612,6 +640,12 @@
   border-color: #d4dde6;
   color: #7a8897;
   opacity: 0.85;
+}
+
+.preview-entry.disabled .preview-entry-icon.has-icon {
+  background: #f5f7fa;
+  border-color: #d5dee7;
+  color: #778594;
 }
 
 .preview-source-badge {

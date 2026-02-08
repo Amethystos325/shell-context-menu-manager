@@ -478,6 +478,7 @@ async function resolveCommandStoreEntry(
     const root = blocks.find((block) => block.path.toLowerCase() === keyPath.toLowerCase());
     const fallback = token.split(".").filter(Boolean).pop() ?? token;
     const rawTitle = getRegValue(root, "muiverb") || getRegValue(root, "(default)") || fallback;
+    const icon = getRegValue(root, "icon");
     const resolvedTitle = normalizeCommandStoreTitle(
       token,
       await resolveIndirectTitle(rawTitle, fallback),
@@ -491,9 +492,12 @@ async function resolveCommandStoreEntry(
     const children = subCommands
       ? await resolveCommandStoreSubCommands(subCommands, visited)
       : [];
+    const iconDataUrl = await resolveIconDataUrl(icon);
 
     return {
       title: resolvedTitle,
+      icon: icon || undefined,
+      iconDataUrl,
       submenu: children.length > 0 || Boolean(subCommands.trim()),
       source: "shell",
       registryKey: keyPath,
@@ -524,9 +528,79 @@ async function resolveCommandStoreSubCommands(
 }
 
 const indirectStringCache = new Map<string, string>();
+const iconDataUrlCache = new Map<string, string>();
 
 function escapePowerShellSingleQuoted(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+function normalizeIconReference(raw: string): string {
+  const trimmed = raw.trim().replace(/^"(.*)"$/, "$1").trim();
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.startsWith("@")) {
+    return trimmed.slice(1).trim();
+  }
+  return trimmed;
+}
+
+function looksLikeResolvableIconReference(reference: string): boolean {
+  const token = reference.trim().toLowerCase();
+  if (!token || token.startsWith("data:image/")) {
+    return false;
+  }
+  if (token.includes("\\") || token.includes("/") || token.includes("%")) {
+    return true;
+  }
+  return /\.(dll|exe|ico|png|bmp|icl|mun)(\s*,\s*-?\d+)?$/i.test(token);
+}
+
+async function resolveIconDataUrl(rawIcon: string): Promise<string | undefined> {
+  const normalized = normalizeIconReference(rawIcon);
+  if (!normalized || !looksLikeResolvableIconReference(normalized)) {
+    return undefined;
+  }
+
+  const cacheKey = normalized.toLowerCase();
+  const cached = iconDataUrlCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached || undefined;
+  }
+
+  const escaped = escapePowerShellSingleQuoted(normalized);
+  const command = [
+    `$iconRef='${escaped}'`,
+    "$iconRef=$iconRef.Trim()",
+    "if([string]::IsNullOrWhiteSpace($iconRef)){return}",
+    "if($iconRef.StartsWith('@')){$iconRef=$iconRef.Substring(1)}",
+    "$expanded=[Environment]::ExpandEnvironmentVariables($iconRef).Trim().Trim('\"')",
+    "if([string]::IsNullOrWhiteSpace($expanded)){return}",
+    "$index=0",
+    "$match=[regex]::Match($expanded,'^(.*?),\\s*(-?\\d+)\\s*$')",
+    "if($match.Success){$expanded=$match.Groups[1].Value.Trim().Trim('\"'); $index=[int]$match.Groups[2].Value}",
+    "if(-not [System.IO.Path]::IsPathRooted($expanded)){$system32=Join-Path $env:SystemRoot 'System32'; $candidate=Join-Path $system32 $expanded; if([System.IO.File]::Exists($candidate)){$expanded=$candidate}}",
+    "if(-not [System.IO.File]::Exists($expanded)){return}",
+    "Add-Type -AssemblyName System.Drawing -ErrorAction SilentlyContinue | Out-Null",
+    "if(-not ('ShellCtxIconNative' -as [type])){$sig='using System; using System.Runtime.InteropServices; public static class ShellCtxIconNative { [DllImport(\"shell32.dll\", CharSet=CharSet.Unicode)] public static extern uint ExtractIconEx(string szFileName, int nIconIndex, IntPtr[] phiconLarge, IntPtr[] phiconSmall, uint nIcons); [DllImport(\"user32.dll\", SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)] public static extern bool DestroyIcon(IntPtr hIcon);}'; Add-Type -TypeDefinition $sig -Language CSharp -ErrorAction SilentlyContinue | Out-Null}",
+    "$attempts=New-Object System.Collections.Generic.List[int]",
+    "$attempts.Add($index)",
+    "if($index -ne 0){$attempts.Add(0)}",
+    "if($index -lt 0){$attempts.Add([Math]::Abs($index))}",
+    "$hicon=[IntPtr]::Zero",
+    "foreach($idx in $attempts){$large=New-Object IntPtr[] 1; $small=New-Object IntPtr[] 1; $count=[ShellCtxIconNative]::ExtractIconEx($expanded,$idx,$large,$small,1); if($count -gt 0){ if($large[0]-ne [IntPtr]::Zero){$hicon=$large[0]} elseif($small[0]-ne [IntPtr]::Zero){$hicon=$small[0]}; if($hicon -ne [IntPtr]::Zero){ if($small[0]-ne [IntPtr]::Zero -and $small[0]-ne $hicon){ [ShellCtxIconNative]::DestroyIcon($small[0]) | Out-Null }; break } }; if($large[0]-ne [IntPtr]::Zero){ [ShellCtxIconNative]::DestroyIcon($large[0]) | Out-Null }; if($small[0]-ne [IntPtr]::Zero){ [ShellCtxIconNative]::DestroyIcon($small[0]) | Out-Null }}",
+    "if($hicon -eq [IntPtr]::Zero){return}",
+    "try { $icon=[System.Drawing.Icon]::FromHandle($hicon); try { $bmp=$icon.ToBitmap(); try { $ms=New-Object System.IO.MemoryStream; try { $bmp.Save($ms,[System.Drawing.Imaging.ImageFormat]::Png); 'data:image/png;base64,' + [Convert]::ToBase64String($ms.ToArray()) } finally { $ms.Dispose() } } finally { $bmp.Dispose() } } finally { $icon.Dispose() } } finally { [ShellCtxIconNative]::DestroyIcon($hicon) | Out-Null }",
+  ].join("; ");
+
+  const resolved = (await runPowerShell(command)).trim();
+  if (resolved.startsWith("data:image/")) {
+    iconDataUrlCache.set(cacheKey, resolved);
+    return resolved;
+  }
+
+  iconDataUrlCache.set(cacheKey, "");
+  return undefined;
 }
 
 async function resolveIndirectTitle(raw: string, fallback: string): Promise<string> {
@@ -640,6 +714,21 @@ async function resolveClsidTitle(clsid: string): Promise<string> {
   return defaultValue;
 }
 
+async function resolveClsidIconDataUrl(clsid: string): Promise<string | undefined> {
+  const keyPath = `HKEY_CLASSES_ROOT\\CLSID\\${clsid}\\DefaultIcon`;
+  const output = await runRegQuery(keyPath, false);
+  if (!output) {
+    return undefined;
+  }
+  const blocks = parseRegQueryOutput(output);
+  const root = blocks.find((block) => block.path.toLowerCase() === keyPath.toLowerCase());
+  const iconRef = getRegValue(root, "(default)");
+  if (!iconRef) {
+    return undefined;
+  }
+  return resolveIconDataUrl(iconRef);
+}
+
 function hasSubmenu(verbPath: string, block: RegBlock | undefined, blocks: RegBlock[]): boolean {
   if (getRegValue(block, "subcommands")) {
     return true;
@@ -691,9 +780,13 @@ async function readShellEntries(rootPath: string, shiftKey: boolean): Promise<Sy
       ? await resolveCommandStoreSubCommands(subCommands)
       : [];
     const submenu = hasSubmenu(childPath, block, blocks) || commandStoreChildren.length > 0;
+    const icon = getRegValue(block, "icon");
+    const iconDataUrl = await resolveIconDataUrl(icon);
 
     entries.push({
       title,
+      icon: icon || undefined,
+      iconDataUrl,
       submenu,
       source: "shell",
       registryKey: childPath,
@@ -731,9 +824,13 @@ async function readShellexEntries(rootPath: string, shiftKey: boolean): Promise<
 
     const keyTail = getKeyTail(childPath);
     const defaultValue = getRegValue(block, "(default)");
-    const resolvedTitle = isClsid(defaultValue)
+    const isClsidHandler = isClsid(defaultValue);
+    const resolvedTitle = isClsidHandler
       ? await resolveClsidTitle(defaultValue)
       : defaultValue || keyTail;
+    const iconDataUrl = isClsidHandler
+      ? await resolveClsidIconDataUrl(defaultValue)
+      : undefined;
     const title = normalizeRegistryTitle(resolvedTitle, keyTail);
     if (!title) {
       continue;
@@ -741,6 +838,7 @@ async function readShellexEntries(rootPath: string, shiftKey: boolean): Promise<
 
     entries.push({
       title,
+      iconDataUrl,
       submenu: false,
       source: "shellex",
       registryKey: childPath,
@@ -763,6 +861,8 @@ async function readCommandStoreDesktopEntries(): Promise<SystemMenuEntry[]> {
     const blocks = parseRegQueryOutput(output);
     const root = blocks.find((block) => block.path.toLowerCase() === keyPath.toLowerCase());
     const muiVerb = getRegValue(root, "muiverb");
+    const icon = getRegValue(root, "icon");
+    const iconDataUrl = await resolveIconDataUrl(icon);
     const resolvedTitle = normalizeCommandStoreTitle(
       template.keyName,
       await resolveIndirectTitle(muiVerb || template.fallbackTitle, template.fallbackTitle),
@@ -792,6 +892,8 @@ async function readCommandStoreDesktopEntries(): Promise<SystemMenuEntry[]> {
     }
     return {
       title: resolvedTitle,
+      icon: icon || undefined,
+      iconDataUrl,
       submenu: template.submenu || dedupedChildren.length > 0,
       source: "shell",
       registryKey: keyPath,
@@ -827,10 +929,14 @@ function mergeSystemMenuEntry(existing: SystemMenuEntry, incoming: SystemMenuEnt
   const secondary = preferred === existing ? incoming : existing;
   const mergedChildren = dedupeEntries([...(existing.children ?? []), ...(incoming.children ?? [])]);
   const disabled = existing.disabled === true || incoming.disabled === true;
+  const icon = preferred.icon?.trim() || secondary.icon?.trim();
+  const iconDataUrl = preferred.iconDataUrl || secondary.iconDataUrl;
 
   return {
     ...preferred,
     title: preferred.title.trim() || secondary.title.trim(),
+    icon: icon || undefined,
+    iconDataUrl: iconDataUrl || undefined,
     submenu: existing.submenu || incoming.submenu || mergedChildren.length > 0,
     disabled: disabled ? true : Boolean(preferred.disabled),
     children: mergedChildren.length > 0 ? mergedChildren : undefined,
