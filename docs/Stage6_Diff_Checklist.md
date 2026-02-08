@@ -19,6 +19,12 @@
    - `npm run stage6:diff -- --shift`
    - `npm run stage6:diff -- --baseline docs/Stage6_Desktop_Baseline.json`
    - `npm run stage6:diff -- --sample-path "C:\\Users\\Public\\Desktop"`
+13. 截图提取与视觉对比：
+   - `npm run stage6:visual-extract -- --image res/desktop.png`
+   - `npm run stage6:visual-diff -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+14. 自动策略与回归：
+   - `npm run stage6:autoplan -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+   - `npm run stage6:regress -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
 
 ## 2. 对比维度
 
