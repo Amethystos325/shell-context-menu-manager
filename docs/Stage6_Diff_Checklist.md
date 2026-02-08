@@ -8,12 +8,14 @@
 2. 文件场景基线：`docs/Stage6_File_Baseline.json`
 3. 文件夹场景基线：`docs/Stage6_Dir_Baseline.json`
 4. 空白处场景基线：`docs/Stage6_Back_Baseline.json`
-5. 当前默认对比模式：`combined`（系统快照 + `res/shell.nss` 及其 imports 合并结果）
-6. 核心期望项：`expected`
-7. 允许存在但不计入差异的环境项：`optional`、`optionalPatterns`、`ignoredPatterns`
-8. 单场景命令：`npm run stage6:diff`
-9. 多场景命令：`npm run stage6:matrix`
-10. 可选参数：
+5. 磁盘场景基线：`docs/Stage6_Drive_Baseline.json`
+6. 任务栏场景基线：`docs/Stage6_Taskbar_Baseline.json`
+7. 当前默认对比模式：`combined`（系统快照 + `res/shell.nss` 及其 imports 合并结果）
+8. 核心期望项：`expected`
+9. 允许存在但不计入差异的环境项：`optional`、`optionalPatterns`、`ignoredPatterns`
+10. 单场景命令：`npm run stage6:diff`
+11. 多场景命令：`npm run stage6:matrix`
+12. 可选参数：
    - `npm run stage6:diff -- --shift`
    - `npm run stage6:diff -- --baseline docs/Stage6_Desktop_Baseline.json`
    - `npm run stage6:diff -- --sample-path "C:\\Users\\Public\\Desktop"`
@@ -79,3 +81,19 @@
 1. 为 `file/dir/back` 新增独立基线并纳入阶段 6 对比体系。
 2. `stage6-diff` 支持 `optionalPatterns/ignoredPatterns`，降低插件与本地语言差异噪音。
 3. 新增 `stage6:matrix` 批量执行脚本，形成多场景一键回归入口。
+
+## 7. 第四轮脚本输出（2026-02-08）
+
+执行命令：`npm run stage6:matrix`
+
+结果：
+1. `desktop-combined`: `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
+2. `file-combined`: `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
+3. `dir-combined`: `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
+4. `back-combined`: `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
+5. `drive-combined`: `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
+6. `taskbar-combined`: `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
+
+本轮收敛动作：
+1. 新增 `drive/taskbar` 两个场景基线，形成 6 场景覆盖。
+2. `stage6:matrix` 扩展为 6 场景批量回归，作为阶段 6 默认验收入口。

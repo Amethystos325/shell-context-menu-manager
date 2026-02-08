@@ -1,0 +1,21 @@
+{
+  "locationType": "taskbar",
+  "mode": "combined",
+  "configPath": "res/shell.nss",
+  "selectionName": "Taskbar",
+  "selectionCount": 0,
+  "expected": [
+    { "title": "Terminal", "submenu": true },
+    { "title": "Toolbars", "submenu": false },
+    { "title": "Search", "submenu": false },
+    { "title": "Task Manager", "submenu": false },
+    { "title": "Taskbar settings", "submenu": false }
+  ],
+  "optional": [
+    { "title": "[menu]", "submenu": true }
+  ],
+  "ignoredPatterns": [
+    "class$",
+    "^\\{[0-9A-F-]{36}\\}$"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "locationType": "drive",
+  "mode": "combined",
+  "configPath": "res/shell.nss",
+  "selectionName": "C:\\",
+  "selectionCount": 1,
+  "expected": [
+    { "title": "Terminal", "submenu": true },
+    { "title": "Open", "submenu": false },
+    { "title": "Copy", "submenu": false },
+    { "title": "Properties", "submenu": false },
+    { "title": "Pin/Unpin", "submenu": true },
+    { "title": "File manage", "submenu": true },
+    { "title": "Go To", "submenu": true }
+  ],
+  "optional": [
+    { "title": "Turn on BitLocker" },
+    { "title": "Unlock with File Locksmith" },
+    { "title": "Give access to", "submenu": true },
+    { "title": "Restore previous versions" },
+    { "title": "7-Zip", "submenu": true },
+    { "title": "Format..." },
+    { "title": "Create shortcut" },
+    { "title": "cmd" },
+    { "title": "find" },
+    { "title": "Powershell" },
+    { "title": "change-passphrase" },
+    { "title": "change-pin" },
+    { "title": "encrypt-bde" },
+    { "title": "encrypt-bde-elev" },
+    { "title": "manage-bde" },
+    { "title": "resume-bde" },
+    { "title": "resume-bde-elev" },
+    { "title": "unlock-bde" }
+  ],
+  "optionalPatterns": [
+    "^\\{[0-9A-F-]{36}\\}$",
+    "class$",
+    "context menu",
+    "shell extension",
+    "work folders",
+    "7-zip"
+  ],
+  "ignored": [
+    "Nilesoft.Shell",
+    "FileSyncEx"
+  ]
+}

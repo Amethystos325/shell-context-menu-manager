@@ -66,6 +66,15 @@ function run(): void {
       baselinePath: "docs/Stage6_Back_Baseline.json",
       samplePath: root,
     },
+    {
+      name: "drive-combined",
+      baselinePath: "docs/Stage6_Drive_Baseline.json",
+      samplePath: "C:\\",
+    },
+    {
+      name: "taskbar-combined",
+      baselinePath: "docs/Stage6_Taskbar_Baseline.json",
+    },
   ];
 
   const failures: string[] = [];
