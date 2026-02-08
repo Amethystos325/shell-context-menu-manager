@@ -1,0 +1,17 @@
+{
+  "locationType": "desktop",
+  "expected": [
+    { "title": "View", "submenu": true },
+    { "title": "Sort by", "submenu": true },
+    { "title": "Refresh", "submenu": false },
+    { "title": "Paste", "submenu": false },
+    { "title": "Terminal", "submenu": true },
+    { "title": "File manage", "submenu": true },
+    { "title": "Go To", "submenu": true },
+    { "title": "NVIDIA App", "submenu": false },
+    { "title": "NVIDIA Control Panel", "submenu": false },
+    { "title": "New", "submenu": true },
+    { "title": "Display settings", "submenu": false },
+    { "title": "Personalize", "submenu": false }
+  ]
+}

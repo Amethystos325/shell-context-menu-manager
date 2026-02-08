@@ -20,6 +20,7 @@ export interface RuntimePreviewContext {
 export interface RuntimeSystemMenuEntry {
   title: string;
   submenu?: boolean;
+  disabled?: boolean;
   children?: RuntimeSystemMenuEntry[];
 }
 
@@ -998,6 +999,7 @@ function normalizeRuntimeSystemMenuEntries(
     normalized.push({
       title,
       submenu: Boolean(entry.submenu),
+      disabled: Boolean(entry.disabled),
       children,
     });
   }
@@ -1019,6 +1021,7 @@ function toRuntimeSystemChildren(
       kind: hasChildren ? "menu" : "item",
       title: entry.title,
       source: "system",
+      disabled: Boolean(entry.disabled),
       submenu: Boolean(entry.submenu) || hasChildren,
       children: hasChildren ? nested : undefined,
     });
@@ -1050,7 +1053,7 @@ function applyRulesToSystemItems(
             orderHint: getSystemOrderHint(context, entry.title, index),
             hidden: false,
             labelOnly: false,
-            disabled: false,
+            disabled: Boolean(entry.disabled),
             submenu: Boolean(entry.submenu) || children.length > 0 || isSystemSubmenuTitle(context, entry.title),
             children,
             menuGroup: "",

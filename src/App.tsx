@@ -113,6 +113,7 @@ function toRuntimeSystemMenuEntries(entries: SystemMenuEntry[]): RuntimeSystemMe
     .map((entry) => ({
       title: entry.title,
       submenu: entry.submenu,
+      disabled: Boolean(entry.disabled),
       children: toRuntimeSystemMenuEntries(entry.children ?? []),
     }))
     .filter((entry) => entry.title.trim().length > 0);
@@ -228,10 +229,11 @@ interface PreviewTreeProps {
 
 interface SystemMenuSnapshotListProps {
   entries: SystemMenuEntry[];
+  disabledText: string;
   depth?: number;
 }
 
-function SystemMenuSnapshotList({ entries, depth = 0 }: SystemMenuSnapshotListProps) {
+function SystemMenuSnapshotList({ entries, disabledText, depth = 0 }: SystemMenuSnapshotListProps) {
   if (entries.length === 0) {
     return null;
   }
@@ -243,10 +245,17 @@ function SystemMenuSnapshotList({ entries, depth = 0 }: SystemMenuSnapshotListPr
           <div className="preview-system-item-row">
             <span className={`preview-source-badge source-${entry.source}`}>{entry.source}</span>
             <span>{entry.title}</span>
+            {entry.disabled ? (
+              <span className="preview-system-state-tag">{disabledText}</span>
+            ) : null}
             {entry.submenu ? <span className="preview-submenu-marker">{">"}</span> : null}
           </div>
           {entry.children && entry.children.length > 0 ? (
-            <SystemMenuSnapshotList entries={entry.children} depth={depth + 1} />
+            <SystemMenuSnapshotList
+              entries={entry.children}
+              disabledText={disabledText}
+              depth={depth + 1}
+            />
           ) : null}
         </li>
       ))}
@@ -1498,7 +1507,10 @@ function App() {
           {systemMenuEntries.length === 0 ? (
             <p className="preview-hint">{t("preview.systemItems.empty")}</p>
           ) : (
-            <SystemMenuSnapshotList entries={systemMenuEntries} />
+            <SystemMenuSnapshotList
+              entries={systemMenuEntries}
+              disabledText={t("preview.systemItems.disabled")}
+            />
           )}
           <p className="preview-hint">{t("preview.systemItems.hint")}</p>
         </div>

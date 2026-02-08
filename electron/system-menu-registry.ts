@@ -21,6 +21,7 @@ interface RegBlock {
 interface RuntimeProbeEntry {
   Title?: string;
   Submenu?: boolean;
+  Disabled?: boolean;
   Children?: RuntimeProbeEntry[];
 }
 
@@ -50,6 +51,7 @@ const COMMAND_STORE_DESKTOP_KEYS: CommandStoreTemplate[] = [
   },
   { keyName: "Windows.paste", fallbackTitle: "Paste", submenu: false },
   { keyName: "Windows.Refresh", fallbackTitle: "Refresh", submenu: false },
+  { keyName: "Windows.New", fallbackTitle: "New", submenu: true },
 ];
 
 const REGISTRY_ROOTS: Record<PreviewLocationType, RegistryRoots> = {
@@ -83,6 +85,12 @@ const REGISTRY_ROOTS: Record<PreviewLocationType, RegistryRoots> = {
     shell: [],
     shellex: [],
   },
+};
+
+const SOURCE_PRIORITY: Record<SystemMenuEntry["source"], number> = {
+  "runtime-com": 3,
+  shell: 2,
+  shellex: 1,
 };
 
 function getPowerShellPath(): string {
@@ -388,6 +396,94 @@ function normalizeRegistryTitle(raw: string, fallback: string): string {
   return trimmed.replace(/&(?=\S)/g, "").trim();
 }
 
+function normalizeEntryKey(title: string): string {
+  return title.trim().toLowerCase();
+}
+
+function splitSubCommands(raw: string): string[] {
+  return raw
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item) {
+        return false;
+      }
+      const normalized = item.toLowerCase();
+      return normalized !== "|" && normalized !== "separator";
+    });
+}
+
+async function resolveCommandStoreEntry(
+  commandName: string,
+  visited: Set<string>,
+): Promise<SystemMenuEntry | null> {
+  const token = commandName.trim();
+  if (!token) {
+    return null;
+  }
+
+  const visitKey = token.toLowerCase();
+  if (visited.has(visitKey)) {
+    return null;
+  }
+  visited.add(visitKey);
+
+  try {
+    const keyPath = `${COMMAND_STORE_ROOT}\\${token}`;
+    const output = await runRegQuery(keyPath, false);
+    if (!output) {
+      return null;
+    }
+
+    const blocks = parseRegQueryOutput(output);
+    const root = blocks.find((block) => block.path.toLowerCase() === keyPath.toLowerCase());
+    const fallback = token.split(".").filter(Boolean).pop() ?? token;
+    const rawTitle = getRegValue(root, "muiverb") || getRegValue(root, "(default)") || fallback;
+    const resolvedTitle = normalizeCommandStoreTitle(
+      token,
+      await resolveIndirectTitle(rawTitle, fallback),
+      fallback,
+    );
+    if (!resolvedTitle.trim()) {
+      return null;
+    }
+
+    const subCommands = getRegValue(root, "subcommands");
+    const children = subCommands
+      ? await resolveCommandStoreSubCommands(subCommands, visited)
+      : [];
+
+    return {
+      title: resolvedTitle,
+      submenu: children.length > 0 || Boolean(subCommands.trim()),
+      source: "shell",
+      registryKey: keyPath,
+      children: children.length > 0 ? children : undefined,
+    };
+  } finally {
+    visited.delete(visitKey);
+  }
+}
+
+async function resolveCommandStoreSubCommands(
+  rawSubCommands: string,
+  visited = new Set<string>(),
+): Promise<SystemMenuEntry[]> {
+  const tokens = splitSubCommands(rawSubCommands);
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  const entries: SystemMenuEntry[] = [];
+  for (const token of tokens) {
+    const entry = await resolveCommandStoreEntry(token, visited);
+    if (entry) {
+      entries.push(entry);
+    }
+  }
+  return dedupeEntries(entries);
+}
+
 const indirectStringCache = new Map<string, string>();
 
 function escapePowerShellSingleQuoted(value: string): string {
@@ -551,12 +647,18 @@ async function readShellEntries(rootPath: string, shiftKey: boolean): Promise<Sy
     if (!title) {
       continue;
     }
+    const subCommands = getRegValue(block, "subcommands");
+    const commandStoreChildren = subCommands
+      ? await resolveCommandStoreSubCommands(subCommands)
+      : [];
+    const submenu = hasSubmenu(childPath, block, blocks) || commandStoreChildren.length > 0;
 
     entries.push({
       title,
-      submenu: hasSubmenu(childPath, block, blocks),
+      submenu,
       source: "shell",
       registryKey: childPath,
+      children: commandStoreChildren.length > 0 ? commandStoreChildren : undefined,
     });
   }
 
@@ -679,17 +781,46 @@ async function readDesktopExtraNvidiaEntries(shiftKey: boolean): Promise<SystemM
   });
 }
 
+function mergeSystemMenuEntry(existing: SystemMenuEntry, incoming: SystemMenuEntry): SystemMenuEntry {
+  const existingPriority = SOURCE_PRIORITY[existing.source];
+  const incomingPriority = SOURCE_PRIORITY[incoming.source];
+  const preferred = incomingPriority > existingPriority ? incoming : existing;
+  const secondary = preferred === existing ? incoming : existing;
+  const mergedChildren = dedupeEntries([...(existing.children ?? []), ...(incoming.children ?? [])]);
+  const disabled = existing.disabled === true || incoming.disabled === true;
+
+  return {
+    ...preferred,
+    title: preferred.title.trim() || secondary.title.trim(),
+    submenu: existing.submenu || incoming.submenu || mergedChildren.length > 0,
+    disabled: disabled ? true : Boolean(preferred.disabled),
+    children: mergedChildren.length > 0 ? mergedChildren : undefined,
+  };
+}
+
 function dedupeEntries(entries: SystemMenuEntry[]): SystemMenuEntry[] {
-  const seen = new Set<string>();
   const out: SystemMenuEntry[] = [];
+  const keyToIndex = new Map<string, number>();
+
   for (const entry of entries) {
-    const key = entry.title.toLowerCase();
-    if (seen.has(key)) {
+    const key = normalizeEntryKey(entry.title);
+    if (!key) {
       continue;
     }
-    seen.add(key);
-    out.push(entry);
+
+    const existingIndex = keyToIndex.get(key);
+    if (existingIndex === undefined) {
+      keyToIndex.set(key, out.length);
+      out.push({
+        ...entry,
+        children: entry.children ? dedupeEntries(entry.children) : undefined,
+      });
+      continue;
+    }
+
+    out[existingIndex] = mergeSystemMenuEntry(out[existingIndex], entry);
   }
+
   return out;
 }
 
@@ -715,6 +846,7 @@ function mapRuntimeProbeEntries(
     output.push({
       title,
       submenu: Boolean(entry?.Submenu) || children.length > 0,
+      disabled: Boolean(entry?.Disabled),
       source: "runtime-com",
       registryKey: `runtime-com:${mode}:${targetPath}:${key}`,
       children,

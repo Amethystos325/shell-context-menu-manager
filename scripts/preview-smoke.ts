@@ -90,6 +90,34 @@ menu(vis=key.shift() title="Dev") {
   assert.ok(flattenTitles(clipboardPreview.combinedEntries).includes("Undo Copy"), "Expected Undo Copy when clipboard has content.");
   assert.equal(findEntryByTitle(clipboardPreview.combinedEntries, "Paste")?.disabled, false);
 
+  const systemStatePreview = buildRuntimePreview(document, {
+    locationType: "desktop",
+    selectionCount: 1,
+    selectionName: "Desktop",
+    shiftKey: false,
+    leftButton: false,
+    hasAdmin: false,
+    systemMenuEntries: [
+      {
+        title: "Refresh",
+        submenu: false,
+        disabled: true,
+      },
+      {
+        title: "View",
+        submenu: true,
+        children: [
+          {
+            title: "Large icons",
+            submenu: false,
+          },
+        ],
+      },
+    ],
+  });
+  assert.equal(findEntryByTitle(systemStatePreview.combinedEntries, "Refresh")?.disabled, true);
+  assert.ok(findEntryByTitle(systemStatePreview.combinedEntries, "Large icons"));
+
   console.log("preview-smoke: OK");
 }
 

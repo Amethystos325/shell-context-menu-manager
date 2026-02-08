@@ -104,6 +104,7 @@ export interface SystemMenuSnapshotInput {
 export interface SystemMenuEntry {
   title: string;
   submenu: boolean;
+  disabled?: boolean;
   source: "shell" | "shellex" | "runtime-com";
   registryKey: string;
   children?: SystemMenuEntry[];

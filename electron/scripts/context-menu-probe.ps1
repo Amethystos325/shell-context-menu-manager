@@ -22,6 +22,7 @@ using System.Text;
 public sealed class MenuEntry {
   public string Title { get; set; }
   public bool Submenu { get; set; }
+  public bool Disabled { get; set; }
   public List<MenuEntry> Children { get; set; }
 }
 
@@ -104,6 +105,8 @@ public static class ShellContextMenuProbe {
   private const uint CMF_NORMAL = 0x00000000;
   private const uint CMF_EXTENDEDVERBS = 0x00000100;
   private const uint MF_BYPOSITION = 0x00000400;
+  private const uint MF_GRAYED = 0x00000001;
+  private const uint MF_DISABLED = 0x00000002;
   private const uint MF_SEPARATOR = 0x00000800;
   private const uint WM_INITMENUPOPUP = 0x0117;
 
@@ -219,10 +222,11 @@ public static class ShellContextMenuProbe {
       var entry = new MenuEntry {
         Title = title,
         Submenu = hasSubmenu,
+        Disabled = (state & (MF_GRAYED | MF_DISABLED)) != 0,
         Children = new List<MenuEntry>(),
       };
 
-      if (hasSubmenu && depth < 1) {
+      if (hasSubmenu && depth < 2) {
         NotifyInitMenuPopup(cm2, cm3, subMenu, i);
         entry.Children = ExtractMenuEntries(subMenu, cm2, cm3, depth + 1);
       }

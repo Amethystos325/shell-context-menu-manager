@@ -13,8 +13,8 @@
 | 阶段 2 | 配置内核（解析、模型、序列化、校验） | Done | 2026-02-07 | 2026-02-07 |
 | 阶段 3 | 可视化编辑器 | Done | 2026-02-07 | 2026-02-07 |
 | 阶段 4 | 发布闭环（规则、Diff、备份、回滚、应用） | Done | 2026-02-07 | 2026-02-07 |
-| 阶段 5 | 稳定性测试与交付 | In Progress | 2026-02-07 | - |
-| 阶段 6 | 真实菜单一致性收敛 | Not Started | - | - |
+| 阶段 5 | 稳定性测试与交付 | Done | 2026-02-07 | 2026-02-08 |
+| 阶段 6 | 真实菜单一致性收敛 | In Progress | 2026-02-08 | - |
 
 状态取值约定：
 1. `Not Started`：未开始。
@@ -157,7 +157,7 @@
 
 ### 阶段 5：稳定性测试与交付
 
-- 当前状态：`In Progress`
+- 当前状态：`Done`
 - 已完成工作：
   - 已具备自动 smoke 套件基础：
     - `npm run core:smoke`
@@ -220,6 +220,34 @@
   - 扩展 `CommandStore` + COM 覆盖范围，减少遗漏系统项。
   - 固化自动化对比脚本输出，作为版本回归基线。
 
+### 阶段 6：真实菜单一致性收敛
+
+- 当前状态：`In Progress`
+- 已完成工作（第一轮）：
+  - 完成 COM 菜单探测增强：增加 `disabled` 状态输出，子菜单递归深度由 1 层提升到 2 层：
+    - `electron/scripts/context-menu-probe.ps1`
+  - 完成系统菜单多源合并策略升级：从“同名去重”升级为“同名合并 + 子菜单合并（优先更高质量来源）”：
+    - `electron/system-menu-registry.ts`
+  - 完成 `shell` 注册表 `SubCommands` 回溯解析，自动补齐 `CommandStore` 子菜单项，降低遗漏：
+    - `electron/system-menu-registry.ts`
+  - 完成系统快照 `disabled` 状态全链路透传（IPC -> 预览引擎 -> UI）并在快照区可视化标记：
+    - `src/shared/ipc.ts`
+    - `src/preview/runtime-preview.ts`
+    - `src/App.tsx`
+    - `src/App.css`
+    - `src/i18n.ts`
+  - 新增阶段 6 差异对比脚本与基线：
+    - 脚本：`scripts/stage6-diff.ts`（命令：`npm run stage6:diff`）
+    - 基线：`docs/Stage6_Desktop_Baseline.json`
+    - 差异清单文档：`docs/Stage6_Diff_Checklist.md`
+    - 首轮输出：`missing=3`、`extra=3`、`order-mismatch=7`、`submenu-mismatch=0`
+  - 补充预览回归用例，验证系统菜单禁用态与子菜单透传：
+    - `scripts/preview-smoke.ts`
+- 下一轮应完成工作：
+  - 基于 `res/desktop.png` + `npm run stage6:diff` 输出更新差异清单，持续收敛 `missing/extra/order/submenu`。
+  - 继续扩展 `CommandStore` 模板与 COM 采样场景（文件/文件夹/空白处）覆盖。
+  - 继续对齐桌面空白处分隔线与关键系统项状态，减少人工规则偏置。
+
 ## 3. 本轮工作总结（2026-02-08）
 
 1. 解析器与校验器能力升级到真实配置可用级别，并通过 `res/*.nss` 批量验证。
@@ -230,3 +258,6 @@
    - COM 运行时探测：`IContextMenu` 系列（含子菜单）
 5. 已执行并落实强制规范：禁止 mock 数据用于渲染结果；真实数据读取失败时只显示错误/空态，不回退静态 mock 菜单。
 6. 已建立阶段对比方式：每阶段开发完成后，基于 `res/desktop.png` 与当前渲染结果进行差异分析并记录。
+7. 已启动阶段 6 并完成第一轮能力增强：COM 禁用态透传、子菜单深度增强、`SubCommands` 回溯与多源合并升级。
+8. 已建立阶段 6 可复现差异脚本与基线：`npm run stage6:diff` + `docs/Stage6_Desktop_Baseline.json`。
+9. 已将系统快照禁用态接入 UI 与运行时预览，支持状态一致性对照。
