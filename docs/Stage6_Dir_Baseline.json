@@ -1,0 +1,57 @@
+{
+  "locationType": "dir",
+  "mode": "combined",
+  "configPath": "res/shell.nss",
+  "selectionName": "example-folder",
+  "selectionCount": 1,
+  "expected": [
+    { "title": "Terminal", "submenu": true },
+    { "title": "Open", "submenu": false },
+    { "title": "Cut", "submenu": false },
+    { "title": "Copy", "submenu": false },
+    { "title": "Delete", "submenu": false },
+    { "title": "Properties", "submenu": false },
+    { "title": "Pin/Unpin", "submenu": true },
+    { "title": "File manage", "submenu": true },
+    { "title": "Go To", "submenu": true }
+  ],
+  "optional": [
+    { "title": "Open in Terminal" },
+    { "title": "Open with Code" },
+    { "title": "Open Git Bash here" },
+    { "title": "Open Folder as IntelliJ IDEA Community Edition Project" },
+    { "title": "Open Folder as WebStorm Project" },
+    { "title": "Give access to", "submenu": true },
+    { "title": "Include in library", "submenu": true },
+    { "title": "Copy as path" },
+    { "title": "Send to", "submenu": true },
+    { "title": "Create shortcut" },
+    { "title": "Restore previous versions" },
+    { "title": "cmd" },
+    { "title": "find" },
+    { "title": "Powershell" },
+    { "title": "7-Zip", "submenu": true },
+    { "title": "Unlock with File Locksmith" },
+    { "title": "Start Menu Pin" },
+    { "title": "UpdateEncryptionSettings", "submenu": true },
+    { "title": "opennewprocess" },
+    { "title": "opennewtab" },
+    { "title": "opennewwindow" },
+    { "title": "explore" }
+  ],
+  "optionalPatterns": [
+    "^\\{[0-9A-F-]{36}\\}$",
+    "[^\\x20-\\x7E]",
+    "class$",
+    "context menu",
+    "shell extension",
+    "menu handler",
+    "work folders",
+    "7-zip",
+    "library"
+  ],
+  "ignored": [
+    "Nilesoft.Shell",
+    "FileSyncEx"
+  ]
+}

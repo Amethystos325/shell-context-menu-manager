@@ -20,6 +20,7 @@
     "release:smoke": "tsx scripts/release-smoke.ts",
     "res:parse-check": "tsx scripts/res-parse-check.ts",
     "stage6:diff": "tsx scripts/stage6-diff.ts",
+    "stage6:matrix": "tsx scripts/stage6-matrix.ts",
     "stage5:hardening": "tsx scripts/stage5-hardening.ts",
     "package:win:dir": "npm run build && electron-builder --win dir --x64",
     "package:win": "npm run build && electron-builder --win nsis --x64",

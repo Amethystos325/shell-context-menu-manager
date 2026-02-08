@@ -28,6 +28,8 @@ interface BaselineDocument {
   expected: BaselineEntry[];
   optional?: BaselineEntry[];
   ignored?: string[];
+  optionalPatterns?: string[];
+  ignoredPatterns?: string[];
 }
 
 interface CompareSummary {
@@ -63,6 +65,15 @@ function normalizeBaselineEntries(entries: unknown): BaselineEntry[] {
           : Boolean((entry as BaselineEntry).submenu),
     }))
     .filter((entry) => entry.title.length > 0);
+}
+
+function normalizeStringList(values: unknown): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => item.length > 0);
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -131,11 +142,9 @@ async function loadBaseline(filePath: string): Promise<BaselineDocument> {
         : undefined,
     expected,
     optional: normalizeBaselineEntries(parsed.optional),
-    ignored: Array.isArray(parsed.ignored)
-      ? parsed.ignored
-          .map((item) => String(item).trim())
-          .filter((item) => item.length > 0)
-      : [],
+    ignored: normalizeStringList(parsed.ignored),
+    optionalPatterns: normalizeStringList(parsed.optionalPatterns),
+    ignoredPatterns: normalizeStringList(parsed.ignoredPatterns),
   };
 }
 
@@ -274,6 +283,8 @@ function compareMenus(
   actual: BaselineEntry[],
   optional: BaselineEntry[] = [],
   ignored: string[] = [],
+  optionalPatterns: RegExp[] = [],
+  ignoredPatterns: RegExp[] = [],
 ): CompareSummary {
   const expectedMap = new Map<string, BaselineEntry>();
   const expectedOrderKeys: string[] = [];
@@ -311,7 +322,13 @@ function compareMenus(
   const extraTitles: string[] = [];
   for (const entry of actual) {
     const key = normalizeTitle(entry.title);
-    if (expectedMap.has(key) || optionalKeys.has(key) || ignoredKeys.has(key)) {
+    if (
+      expectedMap.has(key) ||
+      optionalKeys.has(key) ||
+      ignoredKeys.has(key) ||
+      optionalPatterns.some((pattern) => pattern.test(entry.title)) ||
+      ignoredPatterns.some((pattern) => pattern.test(entry.title))
+    ) {
       continue;
     }
     extraTitles.push(entry.title);
@@ -364,6 +381,18 @@ function compareMenus(
   };
 }
 
+function compilePatterns(patterns: string[]): RegExp[] {
+  const output: RegExp[] = [];
+  for (const pattern of patterns) {
+    try {
+      output.push(new RegExp(pattern, "i"));
+    } catch {
+      // Ignore invalid regex patterns to keep diff workflow stable.
+    }
+  }
+  return output;
+}
+
 async function run(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const baseline = await loadBaseline(args.baselinePath);
@@ -388,6 +417,8 @@ async function run(): Promise<void> {
     actualTopLevel,
     baseline.optional,
     baseline.ignored,
+    compilePatterns(baseline.optionalPatterns ?? []),
+    compilePatterns(baseline.ignoredPatterns ?? []),
   );
 
   console.log(

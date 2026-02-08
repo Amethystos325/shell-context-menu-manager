@@ -1,0 +1,46 @@
+{
+  "locationType": "back",
+  "mode": "combined",
+  "configPath": "res/shell.nss",
+  "selectionName": "This folder",
+  "selectionCount": 1,
+  "expected": [
+    { "title": "View", "submenu": true },
+    { "title": "Sort by", "submenu": true },
+    { "title": "Refresh", "submenu": false },
+    { "title": "Paste", "submenu": false },
+    { "title": "Properties", "submenu": false },
+    { "title": "Terminal", "submenu": true },
+    { "title": "File manage", "submenu": true },
+    { "title": "Go To", "submenu": true },
+    { "title": "New", "submenu": true }
+  ],
+  "optional": [
+    { "title": "Open with Code" },
+    { "title": "Open Git Bash here" },
+    { "title": "Open Folder as IntelliJ IDEA Community Edition Project" },
+    { "title": "Open Folder as WebStorm Project" },
+    { "title": "Open in Terminal" },
+    { "title": "Give access to", "submenu": true },
+    { "title": "cmd" },
+    { "title": "Powershell" },
+    { "title": "Display settings" },
+    { "title": "Personalize" },
+    { "title": "NVIDIA App" },
+    { "title": "NVIDIA Control Panel" }
+  ],
+  "optionalPatterns": [
+    "^\\{[0-9A-F-]{36}\\}$",
+    "class$",
+    "context menu",
+    "shell extension",
+    "menu handler",
+    "work folders",
+    "new menu",
+    "desktopcontext"
+  ],
+  "ignored": [
+    "Nilesoft.Shell",
+    "FileSyncEx"
+  ]
+}

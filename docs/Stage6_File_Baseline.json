@@ -1,0 +1,55 @@
+{
+  "locationType": "file",
+  "mode": "combined",
+  "configPath": "res/shell.nss",
+  "selectionName": "README.md",
+  "selectionCount": 1,
+  "expected": [
+    { "title": "Terminal", "submenu": true },
+    { "title": "Open", "submenu": false },
+    { "title": "Cut", "submenu": false },
+    { "title": "Copy", "submenu": false },
+    { "title": "Delete", "submenu": false },
+    { "title": "Properties", "submenu": false },
+    { "title": "Pin/Unpin", "submenu": true },
+    { "title": "File manage", "submenu": true },
+    { "title": "Go To", "submenu": true }
+  ],
+  "optional": [
+    { "title": "Move to OneDrive" },
+    { "title": "Open with..." },
+    { "title": "Open with Code" },
+    { "title": "Copy as path" },
+    { "title": "Share" },
+    { "title": "Restore previous versions" },
+    { "title": "Send to", "submenu": true },
+    { "title": "Create shortcut" },
+    { "title": "Edit in Notepad" },
+    { "title": "Unlock with File Locksmith" },
+    { "title": "Taskband Pin" },
+    { "title": "Start Menu Pin" },
+    { "title": "Copy as Path Menu" },
+    { "title": "Ribbon Modern Share Verb" },
+    { "title": "Microsoft SendTo Service" },
+    { "title": "Edit with IntelliJ IDEA Community Edition" },
+    { "title": "Add to Favorites" },
+    { "title": "OfflineFilesLaunchSyncCenter" },
+    { "title": "LaunchWorkfoldersControl" },
+    { "title": "UpdateEncryptionSettingsWork", "submenu": true }
+  ],
+  "optionalPatterns": [
+    "^\\{[0-9A-F-]{36}\\}$",
+    "[^\\x20-\\x7E]",
+    "class$",
+    "context menu",
+    "shell extension",
+    "menu handler",
+    "work folders",
+    "qq",
+    "7-zip"
+  ],
+  "ignored": [
+    "Nilesoft.Shell",
+    "FileSyncEx"
+  ]
+}

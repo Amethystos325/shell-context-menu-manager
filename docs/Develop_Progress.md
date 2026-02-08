@@ -223,7 +223,7 @@
 ### 阶段 6：真实菜单一致性收敛
 
 - 当前状态：`In Progress`
-- 已完成工作（第一、二轮）：
+- 已完成工作（第一至三轮）：
   - 完成 COM 菜单探测增强：增加 `disabled` 状态输出，子菜单递归深度由 1 层提升到 2 层：
     - `electron/scripts/context-menu-probe.ps1`
   - 完成系统菜单多源合并策略升级：从“同名去重”升级为“同名合并 + 子菜单合并（优先更高质量来源）”：
@@ -238,20 +238,27 @@
     - `src/i18n.ts`
   - 新增阶段 6 差异对比脚本与基线：
     - 脚本：`scripts/stage6-diff.ts`（命令：`npm run stage6:diff`）
-    - 基线：`docs/Stage6_Desktop_Baseline.json`
+    - 桌面基线：`docs/Stage6_Desktop_Baseline.json`
+    - 文件基线：`docs/Stage6_File_Baseline.json`
+    - 文件夹基线：`docs/Stage6_Dir_Baseline.json`
+    - 空白处基线：`docs/Stage6_Back_Baseline.json`
     - 差异清单文档：`docs/Stage6_Diff_Checklist.md`
     - 首轮输出：`missing=3`、`extra=3`、`order-mismatch=7`、`submenu-mismatch=0`
     - 第二轮输出：`missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`（`mode=combined`）
+    - 第三轮输出（`npm run stage6:matrix`）：`desktop/file/dir/back` 四场景均为 `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
   - 补充预览回归用例，验证系统菜单禁用态与子菜单透传：
     - `scripts/preview-smoke.ts`
   - 完成阶段 6 第二轮对比口径与排序收敛：
     - `stage6-diff` 升级为 combined 对比（系统快照 + `res/shell.nss` + imports）。
     - 基线支持 `optional` 环境项，避免第三方插件菜单造成噪音差异。
     - 系统快照新增桌面顺序归一（`View/Sort by/Refresh/Paste/...`）以提升稳定性。
+  - 完成阶段 6 第三轮多场景收敛：
+    - `stage6-diff` 支持 `optionalPatterns/ignoredPatterns`，适配多语言与插件差异。
+    - 新增多场景批量回归脚本：`scripts/stage6-matrix.ts`（命令：`npm run stage6:matrix`）。
 - 下一轮应完成工作：
-  - 在 `file/dir/back` 场景建立独立基线与差异清单，扩展阶段 6 覆盖面。
-  - 继续扩展 `CommandStore` 模板与 COM 采样场景（文件/文件夹/空白处）覆盖。
+  - 继续扩展 `CommandStore` 模板与 COM 采样场景（drive/taskbar）覆盖。
   - 引入自动化截图对照（半自动）辅助验证 UI 预览与实机视觉一致性。
+  - 将 `stage6:matrix` 纳入发布前固定回归清单（与 smoke/test 报告联动）。
 
 ## 3. 本轮工作总结（2026-02-08）
 
