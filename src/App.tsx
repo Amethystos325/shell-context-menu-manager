@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createTextDiff,
   parseAndValidate,
@@ -347,6 +347,34 @@ function collectPreviewMenuIds(entries: RuntimePreviewEntry[]): string[] {
   return ids;
 }
 
+function collectNestedPreviewMenuIds(entries: RuntimePreviewEntry[]): string[] {
+  const ids: string[] = [];
+  const stack: Array<{ entry: RuntimePreviewEntry; depth: number }> = entries.map((entry) => ({
+    entry,
+    depth: 0,
+  }));
+
+  while (stack.length > 0) {
+    const current = stack.shift();
+    if (!current) {
+      continue;
+    }
+    const { entry, depth } = current;
+    if (entry.kind === "menu") {
+      if (depth > 0) {
+        ids.push(entry.id);
+      }
+      if (entry.children && entry.children.length > 0) {
+        for (const child of entry.children) {
+          stack.push({ entry: child, depth: depth + 1 });
+        }
+      }
+    }
+  }
+
+  return ids;
+}
+
 function toWindowsPathKey(filePath: string): string {
   return filePath.replaceAll("/", "\\").toLowerCase();
 }
@@ -552,6 +580,11 @@ function App() {
     () => (runtimePreview ? collectPreviewMenuIds(runtimePreview.combinedEntries) : []),
     [runtimePreview],
   );
+  const nestedPreviewMenuIds = useMemo(
+    () => (runtimePreview ? collectNestedPreviewMenuIds(runtimePreview.combinedEntries) : []),
+    [runtimePreview],
+  );
+  const previewMenuSeenIdsRef = useRef<Set<string>>(new Set());
   const dirty = sourceText !== lastSavedText;
   const isPathEmpty = filePath.trim().length === 0;
   const modelLocked = syncState === "error";
@@ -600,6 +633,33 @@ function App() {
   const handleCollapseAllPreviewMenus = () => {
     setCollapsedPreviewMenuIds(new Set(previewMenuIds));
   };
+
+  useEffect(() => {
+    if (previewMenuIds.length === 0) {
+      setCollapsedPreviewMenuIds(new Set());
+      previewMenuSeenIdsRef.current = new Set();
+      return;
+    }
+
+    setCollapsedPreviewMenuIds((prev) => {
+      const validIds = new Set(previewMenuIds);
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (validIds.has(id)) {
+          next.add(id);
+        }
+      }
+
+      const seenIds = previewMenuSeenIdsRef.current;
+      for (const id of nestedPreviewMenuIds) {
+        if (!seenIds.has(id)) {
+          next.add(id);
+        }
+      }
+      previewMenuSeenIdsRef.current = validIds;
+      return next;
+    });
+  }, [nestedPreviewMenuIds, previewMenuIds]);
 
   const refreshSystemMenuSnapshot = useCallback(async () => {
     const api = getShellManagerApi();
