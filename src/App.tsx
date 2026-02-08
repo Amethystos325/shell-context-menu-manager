@@ -569,7 +569,6 @@ function App() {
   const [appName, setAppName] = useState("Shell Context Menu Manager");
   const [appVersion, setAppVersion] = useState("-");
   const [filePath, setFilePath] = useState("");
-  const [backupRootPath, setBackupRootPath] = useState("");
   const [status, setStatus] = useState(() => translate(getInitialLanguage(), "status.ready"));
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -625,8 +624,14 @@ function App() {
   const previewMenuSeenIdsRef = useRef<Set<string>>(new Set());
   const dirty = sourceText !== lastSavedText;
   const isPathEmpty = filePath.trim().length === 0;
-  const modelLocked = syncState === "error";
+  const modelLocked = true;
   const diffLines = useMemo(() => (diffPreview ? flattenDiff(diffPreview) : []), [diffPreview]);
+  const showEditControls = false;
+  const showReleaseControls = false;
+  const readOnlyTip =
+    language === "zh"
+      ? "当前为只读模式，仅支持读取、解析与渲染预览。"
+      : "Read-only mode. Only loading, parsing, and rendering preview are available.";
 
   const updatePreviewContext = (patch: Partial<RuntimePreviewContext>) => {
     setPreviewContext((prev) => ({ ...prev, ...patch }));
@@ -834,7 +839,6 @@ function App() {
         setAppName(appInfo.appName);
         setAppVersion(appInfo.appVersion);
         setFilePath(appInfo.defaultTestFilePath);
-        setBackupRootPath(appInfo.backupRootPath);
         setLogs(recentLogs);
       } catch (error) {
         if (!disposed) {
@@ -1200,7 +1204,7 @@ function App() {
         <div>
           <h1>{appName}</h1>
           <p>{t("app.subtitle", { version: appVersion })}</p>
-          {backupRootPath ? <p className="backup-root">{t("app.backupsRoot", { path: backupRootPath })}</p> : null}
+          <p>{readOnlyTip}</p>
         </div>
         <div className="header-tools">
           <label className="language-select" htmlFor="language">
@@ -1231,60 +1235,68 @@ function App() {
           <button type="button" onClick={handleRead} disabled={busy}>
             {t("action.selectAndRead")}
           </button>
-          <button type="button" onClick={handlePrepareSave} disabled={busy || isPathEmpty}>
-            {t("action.save")}
-          </button>
-          <button type="button" onClick={handleSyncModelFromSource} disabled={busy}>
-            {t("action.refreshModel")}
-          </button>
-          <button type="button" onClick={handleApplyConfig} disabled={releaseBusy || isPathEmpty}>
-            {t("action.apply")}
-          </button>
-          <button type="button" onClick={() => void refreshBackups(filePath)} disabled={releaseBusy || isPathEmpty}>
-            {t("action.refreshBackups")}
-          </button>
+          {showEditControls ? (
+            <>
+              <button type="button" onClick={handlePrepareSave} disabled={busy || isPathEmpty}>
+                {t("action.save")}
+              </button>
+              <button type="button" onClick={handleSyncModelFromSource} disabled={busy}>
+                {t("action.refreshModel")}
+              </button>
+            </>
+          ) : null}
+          {showReleaseControls ? (
+            <>
+              <button type="button" onClick={handleApplyConfig} disabled={releaseBusy || isPathEmpty}>
+                {t("action.apply")}
+              </button>
+              <button type="button" onClick={() => void refreshBackups(filePath)} disabled={releaseBusy || isPathEmpty}>
+                {t("action.refreshBackups")}
+              </button>
+            </>
+          ) : null}
         </div>
       </section>
 
       <section className="editor-grid">
         <section className="panel tree-panel">
           <h2>{t("section.menuTree")}</h2>
-          <div className="actions compact">
-            <button type="button" onClick={() => handleAddNode("menu")} disabled={modelLocked}>
-              {t("action.addMenu")}
-            </button>
-            <button type="button" onClick={() => handleAddNode("item")} disabled={modelLocked}>
-              {t("action.addItem")}
-            </button>
-            <button type="button" onClick={() => handleAddNode("separator")} disabled={modelLocked}>
-              {t("action.addSeparator")}
-            </button>
-            <button type="button" onClick={() => handleAddNode("modify")} disabled={modelLocked}>
-              {t("action.addModify")}
-            </button>
-            <button type="button" onClick={() => handleAddNode("remove")} disabled={modelLocked}>
-              {t("action.addRemove")}
-            </button>
-            <button type="button" onClick={handleDuplicateNode} disabled={!selectedNode || modelLocked}>
-              {t("action.copy")}
-            </button>
-            <button type="button" onClick={handleDeleteNode} disabled={!selectedNode || modelLocked}>
-              {t("action.delete")}
-            </button>
-          </div>
-          <div className="actions compact">
-            <button type="button" onClick={() => handleMoveNode("up")} disabled={!selectedNode || modelLocked}>
-              {t("action.up")}
-            </button>
-            <button type="button" onClick={() => handleMoveNode("down")} disabled={!selectedNode || modelLocked}>
-              {t("action.down")}
-            </button>
-          </div>
-          <p className={modelLocked ? "tree-tip warn" : "tree-tip"}>
-            {modelLocked
-              ? t("tip.treeLocked")
-              : t("tip.treeDrag")}
-          </p>
+          {showEditControls ? (
+            <>
+              <div className="actions compact">
+                <button type="button" onClick={() => handleAddNode("menu")} disabled={modelLocked}>
+                  {t("action.addMenu")}
+                </button>
+                <button type="button" onClick={() => handleAddNode("item")} disabled={modelLocked}>
+                  {t("action.addItem")}
+                </button>
+                <button type="button" onClick={() => handleAddNode("separator")} disabled={modelLocked}>
+                  {t("action.addSeparator")}
+                </button>
+                <button type="button" onClick={() => handleAddNode("modify")} disabled={modelLocked}>
+                  {t("action.addModify")}
+                </button>
+                <button type="button" onClick={() => handleAddNode("remove")} disabled={modelLocked}>
+                  {t("action.addRemove")}
+                </button>
+                <button type="button" onClick={handleDuplicateNode} disabled={!selectedNode || modelLocked}>
+                  {t("action.copy")}
+                </button>
+                <button type="button" onClick={handleDeleteNode} disabled={!selectedNode || modelLocked}>
+                  {t("action.delete")}
+                </button>
+              </div>
+              <div className="actions compact">
+                <button type="button" onClick={() => handleMoveNode("up")} disabled={!selectedNode || modelLocked}>
+                  {t("action.up")}
+                </button>
+                <button type="button" onClick={() => handleMoveNode("down")} disabled={!selectedNode || modelLocked}>
+                  {t("action.down")}
+                </button>
+              </div>
+            </>
+          ) : null}
+          <p className="tree-tip">{readOnlyTip}</p>
           {documentModel ? (
             documentModel.nodes.length > 0 ? (
               <TreeView
@@ -1473,10 +1485,7 @@ function App() {
           <h2>{t("section.sourcePreview")}</h2>
           <textarea
             value={sourceText}
-            onChange={(event) => {
-              setSourceText(event.target.value);
-              setSyncState("syncing");
-            }}
+            readOnly
             placeholder={t("placeholder.sourcePreview")}
           />
 
@@ -1664,87 +1673,91 @@ function App() {
         )}
       </section>
 
-      <section className="release-grid">
-        <section className="panel diff-panel">
-          <h2>{t("section.diffPreview")}</h2>
-          {!showDiffPreview ? (
-            <p className="empty-tip">{t("tip.openDiffPreview")}</p>
-          ) : null}
-          {showDiffPreview && diffPreview ? (
-            <>
-              <p className="diff-summary">
-                {t("diff.summary", {
-                  oldLines: diffPreview.oldLineCount,
-                  newLines: diffPreview.newLineCount,
-                  hasChanges: diffPreview.hasChanges ? t("word.yes") : t("word.no"),
-                })}
-              </p>
-              <div className="diff-list">
-                {diffLines.length === 0 ? (
-                  <p className="empty-tip">{t("tip.noChangedLines")}</p>
-                ) : (
-                  diffLines.slice(0, 240).map((line, index) => (
-                    <p key={`${line.type}-${index}`} className={`diff-line ${line.type}`}>
-                      {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
-                      {line.text}
-                    </p>
-                  ))
-                )}
+      {showReleaseControls ? (
+        <>
+          <section className="release-grid">
+            <section className="panel diff-panel">
+              <h2>{t("section.diffPreview")}</h2>
+              {!showDiffPreview ? (
+                <p className="empty-tip">{t("tip.openDiffPreview")}</p>
+              ) : null}
+              {showDiffPreview && diffPreview ? (
+                <>
+                  <p className="diff-summary">
+                    {t("diff.summary", {
+                      oldLines: diffPreview.oldLineCount,
+                      newLines: diffPreview.newLineCount,
+                      hasChanges: diffPreview.hasChanges ? t("word.yes") : t("word.no"),
+                    })}
+                  </p>
+                  <div className="diff-list">
+                    {diffLines.length === 0 ? (
+                      <p className="empty-tip">{t("tip.noChangedLines")}</p>
+                    ) : (
+                      diffLines.slice(0, 240).map((line, index) => (
+                        <p key={`${line.type}-${index}`} className={`diff-line ${line.type}`}>
+                          {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
+                          {line.text}
+                        </p>
+                      ))
+                    )}
+                  </div>
+                  <div className="actions">
+                    <button type="button" onClick={handleConfirmSave} disabled={busy || isPathEmpty}>
+                      {t("action.confirmSave")}
+                    </button>
+                    <button type="button" onClick={() => setShowDiffPreview(false)} disabled={busy}>
+                      {t("action.cancel")}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </section>
+
+            <section className="panel backup-panel">
+              <h2>{t("section.rollbackCenter")}</h2>
+              <div className="backup-layout">
+                <div className="backup-list">
+                  {backups.length === 0 ? (
+                    <p className="empty-tip">{t("tip.noBackupsYet")}</p>
+                  ) : (
+                    backups.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={selectedBackupPath === item.backupPath ? "backup-item active" : "backup-item"}
+                        onClick={() => void handleSelectBackup(item.backupPath)}
+                      >
+                        <span>{item.fileName}</span>
+                        <span>{new Date(item.createdAt).toLocaleString(getLanguageLocale(language))}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <textarea
+                  className="backup-preview"
+                  value={backupPreviewText}
+                  readOnly
+                  placeholder={t("placeholder.backupPreview")}
+                />
               </div>
               <div className="actions">
-                <button type="button" onClick={handleConfirmSave} disabled={busy || isPathEmpty}>
-                  {t("action.confirmSave")}
-                </button>
-                <button type="button" onClick={() => setShowDiffPreview(false)} disabled={busy}>
-                  {t("action.cancel")}
+                <button type="button" onClick={handleRestoreBackup} disabled={!selectedBackupPath || releaseBusy}>
+                  {t("action.restoreSelectedBackup")}
                 </button>
               </div>
-            </>
+            </section>
+          </section>
+
+          {manualApplySteps.length > 0 ? (
+            <section className="panel manual-panel">
+              <h2>{t("section.manualApplySteps")}</h2>
+              {manualApplySteps.map((step) => (
+                <p key={step}>{step}</p>
+              ))}
+            </section>
           ) : null}
-        </section>
-
-        <section className="panel backup-panel">
-          <h2>{t("section.rollbackCenter")}</h2>
-          <div className="backup-layout">
-            <div className="backup-list">
-              {backups.length === 0 ? (
-                <p className="empty-tip">{t("tip.noBackupsYet")}</p>
-              ) : (
-                backups.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={selectedBackupPath === item.backupPath ? "backup-item active" : "backup-item"}
-                    onClick={() => void handleSelectBackup(item.backupPath)}
-                  >
-                    <span>{item.fileName}</span>
-                    <span>{new Date(item.createdAt).toLocaleString(getLanguageLocale(language))}</span>
-                  </button>
-                ))
-              )}
-            </div>
-            <textarea
-              className="backup-preview"
-              value={backupPreviewText}
-              readOnly
-              placeholder={t("placeholder.backupPreview")}
-            />
-          </div>
-          <div className="actions">
-            <button type="button" onClick={handleRestoreBackup} disabled={!selectedBackupPath || releaseBusy}>
-              {t("action.restoreSelectedBackup")}
-            </button>
-          </div>
-        </section>
-      </section>
-
-      {manualApplySteps.length > 0 ? (
-        <section className="panel manual-panel">
-          <h2>{t("section.manualApplySteps")}</h2>
-          {manualApplySteps.map((step) => (
-            <p key={step}>{step}</p>
-          ))}
-        </section>
+        </>
       ) : null}
 
       <section className="panel log-panel">
