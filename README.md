@@ -29,8 +29,8 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 18. `npm run stage6:visual-diff -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: compare screenshot extraction with predicted combined rendering
 19. `npm run stage6:autoplan -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: generate convergence strategy from visual diff result
 20. `npm run stage6:regress -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: run full Stage 6 regression pipeline (matrix + visual diff + autoplan + smoke + typecheck + lint)
-21. `npm run stage6:real-capture -- --out artifacts/stage6/desktop-live.png --trigger-mode keyboard --capture-mode screen`: auto open real desktop context menu and capture screenshot
-22. `npm run stage6:real-regress -- --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: one-command real capture + visual regression gate (visual-diff + autoplan)
+21. `npm run stage6:real-capture -- --out artifacts/stage6/desktop-live.png --trigger-mode right-click --capture-mode menu`: auto open real desktop context menu and capture screenshot
+22. `npm run stage6:real-regress -- --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: one-command real capture + visual regression gate (visual-diff + autoplan, default `capture-mode=menu`)
 23. `npm run stage6:real-regress -- --full --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: include full Stage 6 pipeline (`stage6:regress`) after real visual gate
 
 ## Stage 1 Delivered

@@ -12,6 +12,12 @@ interface CliArgs {
   menuReadyDelayMs: number;
   padding: number;
   desktopFocusDelayMs: number;
+  scrollSteps: number;
+  scrollDelta: number;
+  scrollDelayMs: number;
+  downSteps: number;
+  downDelayMs: number;
+  debugLogPath?: string;
   focusDesktop: boolean;
   shiftKey: boolean;
   keepMenuOpen: boolean;
@@ -22,6 +28,15 @@ interface CliArgs {
 interface CaptureResult {
   outputPath: string;
   captureMode?: "screen" | "menu";
+  scroll?: {
+    steps: number;
+    delta: number;
+    delayMs: number;
+  };
+  down?: {
+    steps: number;
+    delayMs: number;
+  };
   click: {
     x: number;
     y: number;
@@ -72,7 +87,7 @@ function parseInteger(value: string, flag: string): number {
 
 function parseArgs(argv: string[]): CliArgs {
   let outPath = path.resolve(process.cwd(), "artifacts", "stage6", "desktop-live.png");
-  let captureMode: "screen" | "menu" = "screen";
+  let captureMode: "screen" | "menu" = "menu";
   let triggerMode: "auto" | "right-click" | "keyboard" = "auto";
   let x: number | undefined;
   let y: number | undefined;
@@ -80,6 +95,12 @@ function parseArgs(argv: string[]): CliArgs {
   let menuReadyDelayMs = 180;
   let padding = 8;
   let desktopFocusDelayMs = 180;
+  let scrollSteps = 0;
+  let scrollDelta = -120;
+  let scrollDelayMs = 70;
+  let downSteps = 0;
+  let downDelayMs = 50;
+  let debugLogPath = "";
   let focusDesktop = true;
   let shiftKey = false;
   let keepMenuOpen = false;
@@ -120,6 +141,36 @@ function parseArgs(argv: string[]): CliArgs {
     }
     if (token === "--desktop-focus-delay-ms") {
       desktopFocusDelayMs = parseInteger(argv[index + 1] ?? "", "--desktop-focus-delay-ms");
+      index += 1;
+      continue;
+    }
+    if (token === "--scroll-steps") {
+      scrollSteps = Math.max(0, parseInteger(argv[index + 1] ?? "", "--scroll-steps"));
+      index += 1;
+      continue;
+    }
+    if (token === "--scroll-delta") {
+      scrollDelta = parseInteger(argv[index + 1] ?? "", "--scroll-delta");
+      index += 1;
+      continue;
+    }
+    if (token === "--scroll-delay-ms") {
+      scrollDelayMs = Math.max(0, parseInteger(argv[index + 1] ?? "", "--scroll-delay-ms"));
+      index += 1;
+      continue;
+    }
+    if (token === "--down-steps") {
+      downSteps = Math.max(0, parseInteger(argv[index + 1] ?? "", "--down-steps"));
+      index += 1;
+      continue;
+    }
+    if (token === "--down-delay-ms") {
+      downDelayMs = Math.max(0, parseInteger(argv[index + 1] ?? "", "--down-delay-ms"));
+      index += 1;
+      continue;
+    }
+    if (token === "--debug-log") {
+      debugLogPath = path.resolve(process.cwd(), argv[index + 1] ?? "");
       index += 1;
       continue;
     }
@@ -172,6 +223,12 @@ function parseArgs(argv: string[]): CliArgs {
     menuReadyDelayMs,
     padding,
     desktopFocusDelayMs,
+    scrollSteps,
+    scrollDelta,
+    scrollDelayMs,
+    downSteps,
+    downDelayMs,
+    debugLogPath: debugLogPath.trim() ? debugLogPath : undefined,
     focusDesktop,
     shiftKey,
     keepMenuOpen,
@@ -205,7 +262,21 @@ function buildPowerShellArgs(scriptPath: string, args: CliArgs): string[] {
     String(Math.max(0, args.padding)),
     "-DesktopFocusDelayMs",
     String(Math.max(0, args.desktopFocusDelayMs)),
+    "-ScrollSteps",
+    String(Math.max(0, args.scrollSteps)),
+    "-ScrollDelta",
+    String(args.scrollDelta),
+    "-ScrollDelayMs",
+    String(Math.max(0, args.scrollDelayMs)),
+    "-DownSteps",
+    String(Math.max(0, args.downSteps)),
+    "-DownDelayMs",
+    String(Math.max(0, args.downDelayMs)),
   ];
+
+  if (args.debugLogPath) {
+    psArgs.push("-DebugLogPath", args.debugLogPath);
+  }
 
   if (args.x !== undefined) {
     psArgs.push("-X", String(args.x));
@@ -235,6 +306,8 @@ function runCapture(args: CliArgs): CaptureResult {
     const payload: CaptureResult = {
       outputPath: args.outPath,
       captureMode: args.captureMode,
+      scroll: { steps: args.scrollSteps, delta: args.scrollDelta, delayMs: args.scrollDelayMs },
+      down: { steps: args.downSteps, delayMs: args.downDelayMs },
       click: { x: args.x ?? -1, y: args.y ?? -1 },
       menuRect: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 },
       captureRect: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 },
@@ -279,7 +352,7 @@ function run(): void {
     return;
   }
   console.log(
-    `stage6-real-capture: mode=${captured.captureMode ?? args.captureMode} output=${captured.outputPath} click=(${captured.click.x},${captured.click.y}) menu=${captured.menuRect.width}x${captured.menuRect.height}`,
+    `stage6-real-capture: mode=${captured.captureMode ?? args.captureMode} output=${captured.outputPath} click=(${captured.click.x},${captured.click.y}) menu=${captured.menuRect.width}x${captured.menuRect.height} down=${captured.down?.steps ?? args.downSteps} scroll=${captured.scroll?.steps ?? args.scrollSteps}`,
   );
 }
 

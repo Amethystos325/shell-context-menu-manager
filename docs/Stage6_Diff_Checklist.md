@@ -162,9 +162,9 @@
 ## 10. 第八轮脚本输出（实机截图自动化）
 
 执行命令：
-1. `npm run stage6:real-capture -- --out artifacts/stage6/desktop-live.png --trigger-mode keyboard --capture-mode screen`
-2. `npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
-3. `npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop" --max-missing 2 --max-extra 1 --max-order 4`
+1. `npm run stage6:real-capture -- --out artifacts/stage6/desktop-live.png --trigger-mode right-click --capture-mode menu`
+2. `npm run stage6:real-regress -- --trigger-mode right-click --capture-mode menu --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+3. `npm run stage6:real-regress -- --trigger-mode right-click --capture-mode menu --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop" --max-missing 0 --max-extra 99 --max-order 99 --max-disabled 99`
 
 结果：
 1. 实机截图：
@@ -172,11 +172,12 @@
    - 本轮样本截图中可稳定提取核心项：`View/Sort by/Refresh/Terminal/File manage/Go To/Paste/New`
 2. 实机回归（严格阈值）：
    - 结果为 `FAIL`（按预期拦截）
-   - 主要差异：`missing=2`（`Display settings`、`Personalize`）、`extra=1`（`Undo Delete Ctrl+Z`）、`order=4`
-3. 实机回归（放宽阈值）：
-   - 结果为 `OK`（阈值命中）
+3. 固定菜单项验证（忽略动态项阈值）：
+   - 结果为 `OK`
+   - 关键指标：`missing=0`（`Display settings`、`Personalize` 已被捕获）
 
 本轮收敛动作：
 1. 新增实机截图脚本 `electron/scripts/context-menu-capture.ps1` 与 CLI 包装 `scripts/stage6-real-capture.ts`。
 2. 新增实机回归编排 `scripts/stage6-real-regress.ts`，默认执行视觉门禁（`visual-diff + autoplan`），可选 `--full` 执行全链路回归。
 3. 新增触发策略与稳定性选项：`--trigger-mode`、`--capture-mode`、阈值参数（`--max-*`）。
+4. 实机截图链路升级为 `PrintWindow` 菜单窗口捕获（菜单模式），并扩展纵向画布，修复底部固定项截断问题。

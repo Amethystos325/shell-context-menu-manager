@@ -63,7 +63,7 @@ function parseInteger(value: string, flag: string): number {
 function parseArgs(argv: string[]): CliArgs {
   let imagePath: string | undefined;
   let captureOutPath = path.resolve(process.cwd(), "artifacts", "stage6", "desktop-live.png");
-  let captureMode: "screen" | "menu" = "screen";
+  let captureMode: "screen" | "menu" = "menu";
   let triggerMode: "auto" | "right-click" | "keyboard" = "auto";
   let baselinePath = path.resolve(process.cwd(), "docs", "Stage6_Desktop_Baseline.json");
   let samplePath = "C:\\Users\\Public\\Desktop";

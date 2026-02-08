@@ -8,6 +8,12 @@ param(
   [int]$MenuReadyDelayMs = 180,
   [int]$Padding = 8,
   [int]$DesktopFocusDelayMs = 180,
+  [int]$ScrollSteps = 0,
+  [int]$ScrollDelta = -120,
+  [int]$ScrollDelayMs = 70,
+  [int]$DownSteps = 0,
+  [int]$DownDelayMs = 50,
+  [string]$DebugLogPath = "",
 
   [ValidateSet("screen", "menu")]
   [string]$CaptureMode = "screen",
@@ -22,11 +28,36 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$resolvedDebugLog = ""
+if (-not [string]::IsNullOrWhiteSpace($DebugLogPath)) {
+  $resolvedDebugLog = [System.IO.Path]::GetFullPath($DebugLogPath)
+  $debugDir = [System.IO.Path]::GetDirectoryName($resolvedDebugLog)
+  if (-not [string]::IsNullOrWhiteSpace($debugDir)) {
+    [System.IO.Directory]::CreateDirectory($debugDir) | Out-Null
+  }
+  if (Test-Path -LiteralPath $resolvedDebugLog) {
+    Remove-Item -LiteralPath $resolvedDebugLog -Force
+  }
+}
+
+function Write-DebugStep {
+  param([string]$Message)
+  if ([string]::IsNullOrWhiteSpace($resolvedDebugLog)) {
+    return
+  }
+  $line = "{0:o} {1}" -f [DateTime]::Now, $Message
+  Add-Content -LiteralPath $resolvedDebugLog -Value $line
+}
+
+Write-DebugStep "start"
+
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
+Write-DebugStep "assemblies loaded"
 
-$typeLoaded = [AppDomain]::CurrentDomain.GetAssemblies().GetTypes().Name -contains "ShellContextMenuCaptureNative"
+$typeLoaded = $null -ne ("ShellContextMenuCaptureNative" -as [type])
 if (-not $typeLoaded) {
+  Write-DebugStep "add-type begin"
   Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
@@ -39,6 +70,7 @@ public static class ShellContextMenuCaptureNative {
   private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
   private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
   private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+  private const uint MOUSEEVENTF_WHEEL = 0x0800;
   private const uint KEYEVENTF_KEYUP = 0x0002;
   private const byte VK_LWIN = 0x5B;
   private const byte VK_M = 0x4D;
@@ -46,6 +78,7 @@ public static class ShellContextMenuCaptureNative {
   private const byte VK_ESCAPE = 0x1B;
   private const byte VK_F10 = 0x79;
   private const byte VK_APPS = 0x5D;
+  private const byte VK_DOWN = 0x28;
 
   [StructLayout(LayoutKind.Sequential)]
   public struct RECT {
@@ -72,6 +105,9 @@ public static class ShellContextMenuCaptureNative {
 
   [DllImport("user32.dll", SetLastError = true)]
   private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+  [DllImport("user32.dll", SetLastError = true)]
+  public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
 
   [DllImport("user32.dll", SetLastError = true)]
   public static extern bool SetCursorPos(int X, int Y);
@@ -122,6 +158,10 @@ public static class ShellContextMenuCaptureNative {
     mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
   }
 
+  public static void MouseWheel(int delta) {
+    mouse_event(MOUSEEVENTF_WHEEL, 0, 0, (uint)delta, UIntPtr.Zero);
+  }
+
   public static void PressF10() {
     keybd_event(VK_F10, 0, 0, UIntPtr.Zero);
     keybd_event(VK_F10, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
@@ -130,6 +170,11 @@ public static class ShellContextMenuCaptureNative {
   public static void PressAppsKey() {
     keybd_event(VK_APPS, 0, 0, UIntPtr.Zero);
     keybd_event(VK_APPS, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+  }
+
+  public static void PressDown() {
+    keybd_event(VK_DOWN, 0, 0, UIntPtr.Zero);
+    keybd_event(VK_DOWN, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
   }
 
   public static int[] GetCursorPosition() {
@@ -188,11 +233,18 @@ public static class ShellContextMenuCaptureNative {
       return true;
     }, IntPtr.Zero);
 
+    long maxDistance = 500;
+    long maxScore = maxDistance * maxDistance;
+    if (bestHandle == IntPtr.Zero || bestScore > maxScore) {
+      return IntPtr.Zero;
+    }
     return bestHandle;
   }
 }
 "@ -Language CSharp
+  Write-DebugStep "add-type done"
 }
+Write-DebugStep "native ready"
 
 function Resolve-CapturePoint {
   param(
@@ -217,8 +269,8 @@ function Get-MenuRect {
     [int]$Timeout
   )
 
-  $started = [Environment]::TickCount64
-  while (($Timeout -le 0) -or (([Environment]::TickCount64 - $started) -lt $Timeout)) {
+  $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+  while (($Timeout -le 0) -or ($stopwatch.ElapsedMilliseconds -lt $Timeout)) {
     $handle = [ShellContextMenuCaptureNative]::FindBestContextMenuWindow($ClickX, $ClickY)
     if ($handle -ne [IntPtr]::Zero) {
       $rect = [ShellContextMenuCaptureNative]::GetWindowRectArray($handle)
@@ -261,9 +313,102 @@ function Save-RectScreenshot {
   }
 }
 
+function Get-WindowBitmap {
+  param(
+    [IntPtr]$Handle,
+    [int]$Width,
+    [int]$Height
+  )
+
+  if ($Handle -eq [IntPtr]::Zero -or $Width -le 0 -or $Height -le 0) {
+    return $null
+  }
+
+  $bmp = New-Object System.Drawing.Bitmap $Width, $Height
+  $graphics = [System.Drawing.Graphics]::FromImage($bmp)
+  $ok = $false
+  try {
+    $hdc = $graphics.GetHdc()
+    try {
+      $ok = [ShellContextMenuCaptureNative]::PrintWindow($Handle, $hdc, 0)
+    } finally {
+      $graphics.ReleaseHdc($hdc)
+    }
+  } finally {
+    $graphics.Dispose()
+  }
+
+  if (-not $ok) {
+    $bmp.Dispose()
+    return $null
+  }
+  return $bmp
+}
+
+function Save-ScreenshotWithMenuOverlay {
+  param(
+    [int]$Left,
+    [int]$Top,
+    [int]$Width,
+    [int]$Height,
+    [hashtable]$MenuRect,
+    [System.Drawing.Bitmap]$MenuBitmap,
+    [string]$Path
+  )
+
+  $screenBmp = New-Object System.Drawing.Bitmap $Width, $Height
+  $graphics = [System.Drawing.Graphics]::FromImage($screenBmp)
+  try {
+    $graphics.CopyFromScreen($Left, $Top, 0, 0, $screenBmp.Size, [System.Drawing.CopyPixelOperation]::SourceCopy)
+    if ($null -ne $MenuBitmap -and $null -ne $MenuRect) {
+      $drawX = $MenuRect.Left - $Left
+      $drawY = $MenuRect.Top - $Top
+      if ($drawX -lt $Width -and $drawY -lt $Height) {
+        $graphics.DrawImage($MenuBitmap, $drawX, $drawY, $MenuRect.Width, $MenuRect.Height)
+      }
+    }
+    $screenBmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+  } finally {
+    $graphics.Dispose()
+    $screenBmp.Dispose()
+  }
+}
+
+function Save-MenuWindowScreenshot {
+  param(
+    [System.Drawing.Bitmap]$MenuBitmap,
+    [int]$PaddingValue,
+    [string]$Path
+  )
+
+  if ($null -eq $MenuBitmap) {
+    throw "Menu window bitmap capture failed."
+  }
+
+  $padValue = [Math]::Max(0, $PaddingValue)
+  if ($padValue -eq 0) {
+    $MenuBitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    return
+  }
+
+  $targetWidth = $MenuBitmap.Width + ($padValue * 2)
+  $targetHeight = $MenuBitmap.Height + ($padValue * 2)
+  $targetBmp = New-Object System.Drawing.Bitmap $targetWidth, $targetHeight
+  $graphics = [System.Drawing.Graphics]::FromImage($targetBmp)
+  try {
+    $graphics.Clear([System.Drawing.Color]::Black)
+    $graphics.DrawImage($MenuBitmap, $padValue, $padValue, $MenuBitmap.Width, $MenuBitmap.Height)
+    $targetBmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+  } finally {
+    $graphics.Dispose()
+    $targetBmp.Dispose()
+  }
+}
+
 $capturePoint = Resolve-CapturePoint -InputX $X -InputY $Y
 $clickX = [int]$capturePoint.X
 $clickY = [int]$capturePoint.Y
+Write-DebugStep "capture point ($clickX,$clickY)"
 
 $resolvedOut = [System.IO.Path]::GetFullPath($OutputPath)
 $outDir = [System.IO.Path]::GetDirectoryName($resolvedOut)
@@ -272,12 +417,14 @@ if ([string]::IsNullOrWhiteSpace($outDir) -eq $false) {
 }
 
 if ($FocusDesktop.IsPresent) {
-  [ShellContextMenuCaptureNative]::PressWinM()
+  [ShellContextMenuCaptureNative]::PressWinD()
   Start-Sleep -Milliseconds ([Math]::Max(0, $DesktopFocusDelayMs))
+  Write-DebugStep "focus desktop done"
 }
 
 [ShellContextMenuCaptureNative]::PressEscape()
 Start-Sleep -Milliseconds 50
+Write-DebugStep "initial escape done"
 
 [ShellContextMenuCaptureNative]::SetCursorPos($clickX, $clickY) | Out-Null
 Start-Sleep -Milliseconds 40
@@ -324,10 +471,32 @@ if ($TriggerMode -eq "auto") {
 } else {
   & $openContextMenu $TriggerMode
 }
+Write-DebugStep "trigger begin mode=$TriggerMode"
 
-Start-Sleep -Milliseconds ([Math]::Max(0, $MenuReadyDelayMs))
+$triggerModes = if ($TriggerMode -eq "auto") { @("right-click", "keyboard") } else { @($TriggerMode) }
+$menuRect = $null
+$maxAttemptsPerMode = 3
+$attemptTimeout = if ($TimeoutMs -gt 0) { [Math]::Min(1200, $TimeoutMs) } else { 1200 }
 
-$menuRect = Get-MenuRect -ClickX $clickX -ClickY $clickY -Timeout $TimeoutMs
+foreach ($mode in $triggerModes) {
+  for ($attempt = 1; $attempt -le $maxAttemptsPerMode; $attempt += 1) {
+    & $openContextMenu $mode
+    Start-Sleep -Milliseconds ([Math]::Max(0, $MenuReadyDelayMs))
+    $menuRect = Get-MenuRect -ClickX $clickX -ClickY $clickY -Timeout $attemptTimeout
+    if ($null -ne $menuRect) {
+      Write-DebugStep "trigger success mode=$mode attempt=$attempt"
+      break
+    }
+    Write-DebugStep "trigger miss mode=$mode attempt=$attempt"
+    [ShellContextMenuCaptureNative]::PressEscape()
+    Start-Sleep -Milliseconds 80
+  }
+  if ($null -ne $menuRect) {
+    break
+  }
+}
+
+Write-DebugStep "menuRect resolved width=$($menuRect.Width) height=$($menuRect.Height)"
 if (($CaptureMode -eq "menu") -and ($null -eq $menuRect)) {
   [ShellContextMenuCaptureNative]::PressEscape()
   throw "Context menu window (#32768) not found near ($clickX, $clickY) within ${TimeoutMs}ms."
@@ -343,6 +512,34 @@ if ($null -eq $menuRect) {
     Width = 0
     Height = 0
   }
+}
+
+if ($DownSteps -gt 0) {
+  $downCount = [Math]::Max(0, $DownSteps)
+  for ($i = 0; $i -lt $downCount; $i += 1) {
+    [ShellContextMenuCaptureNative]::PressDown()
+    Start-Sleep -Milliseconds ([Math]::Max(0, $DownDelayMs))
+  }
+  Start-Sleep -Milliseconds 100
+}
+
+if ($ScrollSteps -gt 0) {
+  $scrollX = $clickX
+  $scrollY = $clickY
+  if ($menuRect.Width -gt 0 -and $menuRect.Height -gt 0) {
+    $scrollX = $menuRect.Left + [int]($menuRect.Width / 2)
+    $scrollY = $menuRect.Top + [int]($menuRect.Height / 2)
+  }
+  $screenBounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+  $scrollX = [Math]::Min([Math]::Max($screenBounds.Left + 5, $scrollX), $screenBounds.Right - 5)
+  $scrollY = [Math]::Min([Math]::Max($screenBounds.Top + 5, $scrollY), $screenBounds.Bottom - 5)
+  [ShellContextMenuCaptureNative]::SetCursorPos($scrollX, $scrollY) | Out-Null
+  Start-Sleep -Milliseconds 40
+  for ($i = 0; $i -lt $ScrollSteps; $i += 1) {
+    [ShellContextMenuCaptureNative]::MouseWheel($ScrollDelta)
+    Start-Sleep -Milliseconds ([Math]::Max(0, $ScrollDelayMs))
+  }
+  Start-Sleep -Milliseconds 100
 }
 
 $screenBounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -368,16 +565,48 @@ if ($CaptureMode -eq "menu") {
 $width = [Math]::Max(1, $right - $left)
 $height = [Math]::Max(1, $bottom - $top)
 
-Save-RectScreenshot -Left $left -Top $top -Width $width -Height $height -Path $resolvedOut
+$menuBitmap = $null
+if ($menuRect.Width -gt 0 -and $menuRect.Height -gt 0 -and $menuRect.Handle -ne [IntPtr]::Zero) {
+  $menuBitmapHeight = $menuRect.Height
+  if ($CaptureMode -eq "menu") {
+    $menuBitmapHeight = [Math]::Max($menuRect.Height, $screenBounds.Height + 400)
+  }
+  $menuBitmap = Get-WindowBitmap -Handle $menuRect.Handle -Width $menuRect.Width -Height $menuBitmapHeight
+}
+
+if ($CaptureMode -eq "menu") {
+  if ($null -ne $menuBitmap) {
+    Save-MenuWindowScreenshot -MenuBitmap $menuBitmap -PaddingValue $pad -Path $resolvedOut
+  } else {
+    Save-RectScreenshot -Left $left -Top $top -Width $width -Height $height -Path $resolvedOut
+  }
+} else {
+  Save-ScreenshotWithMenuOverlay -Left $left -Top $top -Width $width -Height $height -MenuRect $menuRect -MenuBitmap $menuBitmap -Path $resolvedOut
+}
+
+if ($null -ne $menuBitmap) {
+  $menuBitmap.Dispose()
+}
+Write-DebugStep "screenshot saved"
 
 if (-not $KeepMenuOpen.IsPresent) {
   Start-Sleep -Milliseconds 80
   [ShellContextMenuCaptureNative]::PressEscape()
+  Write-DebugStep "final escape done"
 }
 
 $result = [ordered]@{
   outputPath = $resolvedOut
   captureMode = $CaptureMode
+  scroll = [ordered]@{
+    steps = $ScrollSteps
+    delta = $ScrollDelta
+    delayMs = $ScrollDelayMs
+  }
+  down = [ordered]@{
+    steps = $DownSteps
+    delayMs = $DownDelayMs
+  }
   click = [ordered]@{
     x = $clickX
     y = $clickY
@@ -401,3 +630,4 @@ $result = [ordered]@{
 }
 
 $result | ConvertTo-Json -Depth 4
+Write-DebugStep "end"

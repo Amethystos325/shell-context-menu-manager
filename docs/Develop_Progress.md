@@ -296,6 +296,13 @@
       - 严格模式：`npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen ...`（按预期失败并输出差异明细）。
       - 阈值模式：`npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen --max-missing 2 --max-extra 1 --max-order 4 ...`（通过）。
       - 工程检查：`npm run lint`、`npm run typecheck` 通过。
+  - 完成阶段 6 第八轮第三阶段“实机截图截断修复”：
+    - `context-menu-capture.ps1` 增加 `PrintWindow` 菜单窗口捕获，并在 `screen` 模式下执行菜单回贴，避免 GDI 全屏抓取丢失菜单层。
+    - `menu` 模式将窗口捕获画布扩展到屏幕高度级别，解决底部固定项（`Display settings`、`Personalize`）截断。
+    - `stage6-real-capture.ts`、`stage6-real-regress.ts` 默认 `capture-mode` 调整为 `menu`。
+    - 已完成实机验证：
+      - `npm run stage6:real-capture -- --capture-mode menu --trigger-mode right-click`：OCR 可提取 `Display settings`、`Personalize`。
+      - `npm run stage6:real-regress -- --capture-mode menu --trigger-mode right-click --max-missing 0 --max-extra 99 --max-order 99 --max-disabled 99 ...`：`missing=0`，固定菜单项通过。
 - 下一轮应完成工作：
   - 将视觉对比从单图扩展到多场景批处理（desktop/file/dir/back），输出聚合报告。
   - 补充视觉基线与误差阈值文档（包含 OCR 质量下限与失败处理策略）。
