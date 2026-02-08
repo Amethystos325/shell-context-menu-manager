@@ -93,6 +93,25 @@ const SOURCE_PRIORITY: Record<SystemMenuEntry["source"], number> = {
   shellex: 1,
 };
 
+const DESKTOP_ORDER_HINTS: Record<string, number> = {
+  view: 10,
+  "sort by": 20,
+  refresh: 30,
+  paste: 100,
+  "open with code": 120,
+  "open git bash here": 130,
+  "open folder as intellij idea community edition project": 140,
+  "open folder as webstorm project": 150,
+  terminal: 240,
+  "file manage": 250,
+  "go to": 260,
+  "nvidia app": 340,
+  "nvidia control panel": 350,
+  new: 450,
+  "display settings": 460,
+  personalize: 470,
+};
+
 function getPowerShellPath(): string {
   return process.env.windir
     ? path.join(process.env.windir, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
@@ -398,6 +417,26 @@ function normalizeRegistryTitle(raw: string, fallback: string): string {
 
 function normalizeEntryKey(title: string): string {
   return title.trim().toLowerCase();
+}
+
+function getDesktopOrderHint(title: string, fallbackIndex: number): number {
+  const normalized = normalizeEntryKey(title);
+  const hint = DESKTOP_ORDER_HINTS[normalized];
+  if (hint !== undefined) {
+    return hint;
+  }
+  return 200 + fallbackIndex;
+}
+
+function sortDesktopEntries(entries: SystemMenuEntry[]): SystemMenuEntry[] {
+  return entries
+    .map((entry, index) => ({
+      entry,
+      index,
+      hint: getDesktopOrderHint(entry.title, index),
+    }))
+    .sort((a, b) => (a.hint === b.hint ? a.index - b.index : a.hint - b.hint))
+    .map((item) => item.entry);
 }
 
 function splitSubCommands(raw: string): string[] {
@@ -882,8 +921,12 @@ export async function readSystemMenuSnapshot(
     locationType === "desktop"
       ? merged.map(normalizeDesktopEntryTitle).filter((item): item is SystemMenuEntry => Boolean(item))
       : merged;
+  const ordered =
+    locationType === "desktop" || locationType === "back"
+      ? sortDesktopEntries(normalized)
+      : normalized;
   return {
     locationType,
-    entries: normalized,
+    entries: ordered,
   };
 }
