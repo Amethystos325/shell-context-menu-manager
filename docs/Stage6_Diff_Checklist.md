@@ -104,3 +104,49 @@
 本轮收敛动作：
 1. 新增 `drive/taskbar` 两个场景基线，形成 6 场景覆盖。
 2. `stage6:matrix` 扩展为 6 场景批量回归，作为阶段 6 默认验收入口。
+
+## 8. 第五轮脚本输出（2026-02-08）
+
+执行命令：
+1. `npm run stage6:diff -- --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+2. `npm run stage6:matrix`
+
+结果：
+1. 新增维度：`disabled-mismatch`
+2. `desktop/file/dir/back/drive/taskbar` 六场景结构差异均为 0：
+   - `missing=0`
+   - `extra=0`
+   - `order-mismatch=0`
+   - `submenu-mismatch=0`
+   - `disabled-mismatch=0`
+
+本轮收敛动作：
+1. `stage6-diff` 增加 `disabled-mismatch` 对比维度。
+2. `stage6-matrix` 同步纳入 `disabled-mismatch` 通过条件。
+3. 桌面/空白处快照来源过滤增强，避免注册表噪音项干扰核心对比结果。
+
+## 9. 第六至第七轮脚本输出（2026-02-08）
+
+执行命令：
+1. `npm run stage6:visual-extract -- --image res/desktop.png`
+2. `npm run stage6:visual-diff -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+3. `npm run stage6:autoplan -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+4. `npm run stage6:regress -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\\Users\\Public\\Desktop"`
+
+结果：
+1. 视觉对比（`res/desktop.png`）：
+   - `missing=0`
+   - `extra=0`
+   - `order-mismatch=0`
+   - `submenu-mismatch=0`
+   - `disabled-mismatch=0`
+2. 自动策略输出：
+   - `score=100`
+   - 当前策略判定：`Stable`
+3. 一键回归（`stage6:regress`）：
+   - `stage6:matrix`、`stage6:visual-diff`、`stage6:autoplan`、`preview:smoke`、`typecheck`、`lint` 全通过（`OK`）。
+
+本轮收敛动作：
+1. 新增视觉提取、视觉对比、自动策略、一键回归四个脚本，形成阶段 6 闭环。
+2. 视觉提取升级为“文本 OCR + 像素启发式”混合策略，补充 `submenu/disabled/separator` 判定信号。
+3. 将 `stage6:regress` 作为阶段 6 当前推荐验收入口。

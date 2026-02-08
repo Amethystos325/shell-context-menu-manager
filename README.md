@@ -23,6 +23,12 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 12. `npm run res:parse-check`: run parser/validator checks against `res/*.nss` real samples
 13. `npm run package:win:dir`: build Windows unpacked directory
 14. `npm run package:win`: build Windows NSIS installer
+15. `npm run stage6:diff`: run Stage 6 structural diff for a single baseline
+16. `npm run stage6:matrix`: run Stage 6 structural diff matrix (desktop/file/dir/back/drive/taskbar)
+17. `npm run stage6:visual-extract -- --image res/desktop.png`: extract top-level menu entries from screenshot
+18. `npm run stage6:visual-diff -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: compare screenshot extraction with predicted combined rendering
+19. `npm run stage6:autoplan -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: generate convergence strategy from visual diff result
+20. `npm run stage6:regress -- --image res/desktop.png --baseline docs/Stage6_Desktop_Baseline.json --sample-path "C:\Users\Public\Desktop"`: run full Stage 6 regression pipeline (matrix + visual diff + autoplan + smoke + typecheck + lint)
 
 ## Stage 1 Delivered
 
@@ -87,6 +93,23 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
 4. Release smoke:
    - `scripts/release-smoke.ts`
 
+## Stage 6 Delivered (Current)
+
+1. Structural consistency convergence:
+   - `scripts/stage6-diff.ts`
+   - `scripts/stage6-matrix.ts`
+   - baseline set in `docs/Stage6_*_Baseline.json`
+2. Additional mismatch coverage:
+   - `disabled-mismatch` in Stage 6 diff/matrix checks
+3. Runtime alignment enhancements:
+   - system snapshot merge/filter refinement for desktop/back contexts
+   - preview clipboard-state sync from runtime `Paste.disabled`
+4. Screenshot-driven visual convergence pipeline:
+   - visual extraction: `scripts/stage6-visual-extract.ts`
+   - visual diff: `scripts/stage6-visual-diff.ts`
+   - auto strategy planner: `scripts/stage6-autoplan.ts`
+   - one-command regression gate: `scripts/stage6-regress.ts`
+
 ## Docs
 
 1. Development plan: `docs/Develop_Plan.md`
@@ -100,3 +123,11 @@ Electron + React + TypeScript desktop app for visual editing of Nilesoft Shell m
    - `docs/Stage5_Manual_Test_Record.md`
    - `docs/User_Manual.md`
    - `docs/Known_Issues.md`
+5. Stage 6 artifacts:
+   - `docs/Stage6_Diff_Checklist.md`
+   - `docs/Stage6_Desktop_Baseline.json`
+   - `docs/Stage6_File_Baseline.json`
+   - `docs/Stage6_Dir_Baseline.json`
+   - `docs/Stage6_Back_Baseline.json`
+   - `docs/Stage6_Drive_Baseline.json`
+   - `docs/Stage6_Taskbar_Baseline.json`

@@ -223,7 +223,7 @@
 ### 阶段 6：真实菜单一致性收敛
 
 - 当前状态：`In Progress`
-- 已完成工作（第一至三轮）：
+- 已完成工作（第一至第七轮）：
   - 完成 COM 菜单探测增强：增加 `disabled` 状态输出，子菜单递归深度由 1 层提升到 2 层：
     - `electron/scripts/context-menu-probe.ps1`
   - 完成系统菜单多源合并策略升级：从“同名去重”升级为“同名合并 + 子菜单合并（优先更高质量来源）”：
@@ -259,10 +259,24 @@
     - `stage6-diff` 支持 `optionalPatterns/ignoredPatterns`，适配多语言与插件差异。
     - 新增多场景批量回归脚本：`scripts/stage6-matrix.ts`（命令：`npm run stage6:matrix`）。
     - 多场景覆盖从 4 场景扩展到 6 场景（新增 `drive/taskbar` 基线）。
+  - 完成阶段 6 第五轮对齐增强：
+    - `stage6-diff` 增加 `disabled-mismatch` 维度，并纳入 `stage6-matrix` 通过判定。
+    - `electron/system-menu-registry.ts` 增加 `desktop/back` 场景的来源过滤与回退策略，降低注册表噪音项干扰。
+    - `src/App.tsx` 在刷新系统快照后自动同步 `clipboardHasContent`（根据 `Paste.disabled` 推断），缩小禁用态偏差。
+  - 完成阶段 6 第六轮“截图自动对比 + 自动策略 + 回归门禁”MVP：
+    - 新增截图提取脚本：`scripts/stage6-visual-extract.ts`。
+    - 新增视觉差异脚本：`scripts/stage6-visual-diff.ts`。
+    - 新增自动策略脚本：`scripts/stage6-autoplan.ts`。
+    - 新增一键回归脚本：`scripts/stage6-regress.ts`。
+    - 对 `res/desktop.png` 验证结果：视觉维度 `missing/extra/order/submenu/disabled` 全 0。
+  - 完成阶段 6 第七轮视觉提取增强：
+    - `scripts/stage6-visual-lib.ts` 从文本 OCR 解析升级为“文本 + 像素启发式”混合提取（submenu/disabled/separator）。
+    - 保持 `stage6:visual-diff` 与 `stage6:regress` 通过，作为当前默认视觉回归链路。
 - 下一轮应完成工作：
-  - 继续扩展 `CommandStore` 模板与 COM 采样深度（重点子菜单状态与禁用态一致性）。
-  - 引入自动化截图对照（半自动）辅助验证 UI 预览与实机视觉一致性。
-  - 将 `stage6:matrix` 纳入发布前固定回归清单（与 smoke/test 报告联动）。
+  - 将视觉对比从单图扩展到多场景批处理（desktop/file/dir/back），输出聚合报告。
+  - 补充视觉基线与误差阈值文档（包含 OCR 质量下限与失败处理策略）。
+  - 持续扩展 `CommandStore` 模板与 COM 采样深度（重点子菜单层级与禁用态一致性）。
+  - 将 `stage6:regress` 纳入发布前固定回归清单（与 smoke/test 报告联动）。
 
 ## 3. 本轮工作总结（2026-02-08）
 
@@ -277,3 +291,6 @@
 7. 已启动阶段 6 并完成第一轮能力增强：COM 禁用态透传、子菜单深度增强、`SubCommands` 回溯与多源合并升级。
 8. 已建立阶段 6 可复现差异脚本与基线：`npm run stage6:diff` + `docs/Stage6_Desktop_Baseline.json`。
 9. 已将系统快照禁用态接入 UI 与运行时预览，支持状态一致性对照。
+10. 已新增视觉对比链路：`stage6:visual-extract`、`stage6:visual-diff`、`stage6:autoplan`。
+11. 已新增阶段 6 一键回归门禁：`stage6:regress`（结构差异 + 视觉差异 + smoke + typecheck + lint）。
+12. 已完成视觉提取第二版（文本 + 像素混合启发式），并验证 `res/desktop.png` 对比结果稳定为 0 差异。
