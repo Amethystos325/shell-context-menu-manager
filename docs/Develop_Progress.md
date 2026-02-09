@@ -1,334 +1,68 @@
-# Shell UI 管理器（Electron）开发进度跟踪
+# Shell UI 管理器开发进度（当前版）
 
-> 本文件用于配合 `docs/Develop_Plan.md` 执行分阶段开发。  
-> 更新原则：每完成一个阶段，必须同步更新“已完成工作”和“下一阶段工作”。
-> 强制规范：渲染结果严格遵循 `docs/Develop_Plan.md` 第 3.1 节，禁止 mock 数据回退。
+## 1. 阶段状态看板
 
-## 1. 总览看板
+| 阶段 | 状态 | 结果摘要 |
+| --- | --- | --- |
+| 阶段 0 | Done | MVP 边界与页面流程已冻结。 |
+| 阶段 1 | Done | Electron 工程底座、IPC 白名单与日志通道已完成。 |
+| 阶段 2 | Done | 解析/序列化/校验/Diff 核心链路已完成。 |
+| 阶段 3 | Done | 三栏编辑器、树操作、源码同步已完成。 |
+| 阶段 4 | Done | 发布闭环（Diff、备份、回滚、应用）已完成。 |
+| 阶段 5 | Done | 稳定性测试、打包链路、用户文档已完成。 |
+| 阶段 6 | In Progress | 真实菜单一致性收敛进行中。 |
 
-| 阶段 | 名称 | 状态 | 开始日期 | 完成日期 |
-| --- | --- | --- | --- | --- |
-| 阶段 0 | 需求冻结与交互定稿 | Done | 2026-02-07 | 2026-02-07 |
-| 阶段 1 | 工程底座与安全通道 | Done | 2026-02-07 | 2026-02-07 |
-| 阶段 2 | 配置内核（解析、模型、序列化、校验） | Done | 2026-02-07 | 2026-02-07 |
-| 阶段 3 | 可视化编辑器 | Done | 2026-02-07 | 2026-02-07 |
-| 阶段 4 | 发布闭环（规则、Diff、备份、回滚、应用） | Done | 2026-02-07 | 2026-02-07 |
-| 阶段 5 | 稳定性测试与交付 | Done | 2026-02-07 | 2026-02-08 |
-| 阶段 6 | 真实菜单一致性收敛 | In Progress | 2026-02-08 | - |
+## 2. 当前基线能力
 
-状态取值约定：
-1. `Not Started`：未开始。
-2. `In Progress`：进行中。
-3. `Blocked`：被阻塞。
-4. `Done`：已完成并通过阶段验收。
+1. 已形成完整可用链路：配置读取与编辑 -> 校验与 Diff -> 备份写入 -> 回滚恢复 -> 应用配置。
+2. 预览链路已切换为真实系统数据：注册表 + COM 探测，渲染不依赖 mock 回退。
+3. 阶段 6 回归工具链已形成闭环：
+- 结构对比：`stage6:diff`、`stage6:matrix`
+- 视觉对比：`stage6:visual-extract`、`stage6:visual-diff`、`stage6:autoplan`
+- 实机门禁：`stage6:real-capture`、`stage6:real-regress`
+4. 多场景基线已建立：`desktop`、`file`、`dir`、`back`、`drive`、`taskbar`。
 
-## 2. 阶段更新记录
+## 3. 阶段 6 已完成里程碑
 
-### 阶段 0：需求冻结与交互定稿
+1. 系统菜单采集增强
+- 支持更深子菜单层级与禁用态透传。
+- 完成多源菜单合并与场景过滤策略。
+2. 差异检查增强
+- 新增 `disabled-mismatch` 并纳入矩阵回归判定。
+- 完成多场景结构差异的稳定执行链路。
+3. 视觉回归落地
+- 完成截图提取、视觉差异分析、自动策略输出。
+- 实现“一键执行 + 明细输出”的回归流程。
+4. 实机截图门禁落地
+- 支持自动触发右键与菜单窗口捕获。
+- 支持严格模式和阈值模式两类回归策略。
 
-- 当前状态：`Done`
-- 已完成工作：
-  - 输出 MVP 功能冻结清单：`docs/Phase0_Feature_Freeze.md`。
-  - 输出页面流程与低保真页面结构：`docs/Phase0_Page_Flow.md`。
-  - 明确关键主流程与错误场景落点，作为阶段 1 开发输入。
-- 下一阶段（阶段 1）应完成工作：
-  - 初始化 `Electron + TypeScript + Vite + React/Vue` 工程（Node.js v22）。
-  - 完成 `main/preload/renderer` 职责拆分。
-  - 完成 IPC 白名单与参数校验基础框架。
-  - 打通日志模块与错误码规范。
+## 4. 当前待办（有效执行项）
 
-### 阶段 1：工程底座与安全通道
+1. 把视觉回归从单图扩展到多场景批处理，并输出聚合报告。
+2. 固化视觉阈值与失败处理规则，降低 OCR 噪声误报。
+3. 继续补齐 `CommandStore`/COM 覆盖，优先收敛子菜单和禁用态。
+4. 将 `stage6:real-regress` 纳入发布前固定检查清单。
 
-- 当前状态：`Done`
-- 已完成工作：
-  - 初始化 `Electron + TypeScript + Vite + React` 工程，Node 版本基线为 `v22.18.0`。
-  - 完成 `main/preload/renderer` 三层拆分：
-    - `electron/main.ts`
-    - `electron/preload.ts`
-    - `src/*` 渲染层页面
-  - 完成 IPC 白名单通道定义与结果结构：
-    - `app:get-info`
-    - `file:read-text`
-    - `file:write-text`
-    - `log:get-recent`
-    - `log:push`
-  - 完成 IPC 输入校验与错误码规范（`E_VALIDATION`、`E_PERMISSION`、`E_WRITE_FAIL` 等）。
-  - 完成基础日志模块（主进程文件日志 + 渲染层日志面板实时展示）。
-  - 完成工程验证：
-    - `npm run typecheck`
-    - `npm run lint`
-    - `npm run build`
-    - `npm run start` 启动烟测通过。
-- 下一阶段（阶段 2）应完成工作：
-  - 设计统一领域模型并实现最小解析器。
-  - 实现模型序列化和基础校验器。
-  - 实现文本 Diff 数据结构。
+## 5. 回归执行与产物清理
 
-### 阶段 2：配置内核（解析、模型、序列化、校验）
+1. 常用执行顺序
+- `npm run stage6:matrix`
+- `npm run stage6:visual-diff -- --image <image> --baseline <baseline> --sample-path <path>`
+- `npm run stage6:real-regress -- --baseline <baseline> --sample-path <path>`
+2. 产物管理约定
+- `artifacts/` 仅存放临时回归产物。
+- 每次回归完成后清理临时截图与日志，避免历史噪声干扰。
 
-- 当前状态：`Done`
-- 已完成工作：
-  - 设计并实现统一领域模型：`src/core/types.ts`。
-  - 实现最小语法子集解析器：`src/core/parser.ts`，支持：
-    - `menu/item/separator`
-    - `modify/remove`
-    - `import`（字符串和裸路径识别）
-    - 行注释/块注释、行列定位、语法错误抛出
-  - 实现模型序列化器：`src/core/serializer.ts`。
-  - 实现校验器：`src/core/validator.ts`，覆盖：
-    - 必填校验（`item.title/cmd`、`menu.title`、`modify/remove.find`）
-    - 字段合法性校验（`type`、`mode`）
-  - 实现文本 Diff 数据结构：`src/core/diff.ts`。
-  - 实现统一工作流入口：`src/core/workflow.ts`（`parseAndValidate`、`roundTrip`）。
-  - 建立内部测试入口：`scripts/core-smoke.ts` + `samples/configs/*.nss`（10 份样例）。
-  - 完成验收验证：
-    - `npm run core:smoke` 通过（含读-改-写-再读一致场景）
-    - `npm run typecheck` 通过
-    - `npm run build` 通过
-- 下一阶段（阶段 3）应完成工作：
-  - 实现菜单树编辑与属性面板。
-  - 打通源码视图与变量快捷插入。
-  - 增加脏状态提示和离开确认。
+## 6. 风险与跟踪点
 
-### 阶段 3：可视化编辑器
+1. OCR 质量波动可能导致视觉误报，需要阈值与规则共同约束。
+2. 第三方菜单项受环境影响较大，需要基线中的可选项机制持续维护。
+3. 系统菜单来源差异（注册表/COM）会影响排序与禁用态，需要持续比对和合并策略校准。
 
-- 当前状态：`Done`
-- 已完成工作：
-  - 完成三栏编辑器基础布局（树/属性/源码预览）并接入主页面：
-    - `src/App.tsx`
-    - `src/App.css`
-  - 完成菜单树基础操作：
-    - 新增节点（`menu/item/separator`）
-    - 删除节点
-    - 复制节点
-    - 上下移动排序
-  - 完成按节点类型的属性面板动态渲染：
-    - `menu` 属性
-    - `item` 属性（含 `args`）
-    - `modify/remove` 基础属性
-  - 完成源码预览区与模型联动（模型改动实时序列化到源码）。
-  - 完成变量快捷插入（`@sel.path` 等）并写入 `item.args`。
-  - 完成脏状态提示与窗口关闭前确认（`beforeunload`）。
-  - 编辑器基础工具函数已抽离：`src/editor/document-utils.ts`。
-  - 完成菜单树拖拽排序（支持拖拽到节点前后，或拖入 `menu` 作为子节点）。
-  - 完成源码与模型双向同步细化：
-    - 源码输入自动解析并回填模型（带防抖）。
-    - 解析失败时锁定树/属性编辑，避免状态冲突。
-    - 解析恢复后自动解锁并按节点路径恢复选中态。
-  - 完成 import 节点属性安全编辑（不再使用文本正则替换）。
-  - 补充阶段 3 稳定性 smoke 脚本：`scripts/editor-smoke.ts`。
-  - 完成阶段 3 当前回归验证：
-    - `npm run typecheck`
-    - `npm run lint`
-    - `npm run core:smoke`
-    - `npm run editor:smoke`
-    - `npm run build`
-    - `npm run start` 启动烟测
-- 当前阶段剩余工作：
-  - 无（已进入阶段 4）。
-- 下一阶段（阶段 4）应完成工作：
-  - 实现 `modify/remove` 专用编辑器。
-  - 打通保存前 Diff、自动备份和回滚中心。
-  - 实现应用配置动作与发布日志链路。
+## 7. 关联文档
 
-### 阶段 4：发布闭环（规则、Diff、备份、回滚、应用）
-
-- 当前状态：`Done`
-- 已完成工作：
-  - 完成 `modify/remove` 列表化编辑入口（Rule Center）：`src/App.tsx`。
-  - 完成保存前 Diff 预览并支持确认/取消写入：`src/App.tsx`。
-  - 完成自动备份策略（写入前自动备份，按时间序保留最近 N 份）：`electron/backup-service.ts`、`electron/main.ts`。
-  - 完成回滚中心（备份列表 + 预览 + 恢复）：`src/App.tsx`、`electron/main.ts`。
-  - 完成应用配置动作：
-    - 自动尝试执行 `shell -register -restart`
-    - 自动失败时提供手动步骤指引
-    - 对应实现：`electron/main.ts`、`src/App.tsx`
-  - 完成发布链路 IPC 扩展：
-    - `app:apply-config`
-    - `backup:list`
-    - `backup:restore`
-    - 对应定义：`src/shared/ipc.ts`、`src/shared/preload-api.ts`、`electron/preload.ts`
-  - 完成阶段 4 专项 smoke：
-    - `scripts/release-smoke.ts`
-    - `npm run release:smoke` 通过
-- 下一阶段（阶段 5）应完成工作：
-  - 完成核心回归测试与异常测试。
-  - 输出 Windows 安装包、使用手册、问题清单。
-
-### 阶段 5：稳定性测试与交付
-
-- 当前状态：`Done`
-- 已完成工作：
-  - 已具备自动 smoke 套件基础：
-    - `npm run core:smoke`
-    - `npm run editor:smoke`
-    - `npm run release:smoke`
-  - 补充阶段 5 文档产出：
-    - 测试用例清单：`docs/Stage5_Test_Cases.md`
-    - 测试报告：`docs/Stage5_Test_Report.md`
-    - 使用手册：`docs/User_Manual.md`
-    - 已知问题：`docs/Known_Issues.md`
-  - 完成 Windows 打包链路验证：
-    - `npm run package:win:dir`
-    - `npm run package:win`
-    - 产物：`release/win-unpacked`、`release/Shell Context Menu Manager Setup 0.1.0.exe`
-  - 补充阶段 5 强化测试脚本：`scripts/stage5-hardening.ts`
-    - 40 次连续写入 + 20 次连续回滚压力验证
-    - 备份缺失恢复失败验证（ENOENT）
-    - 权限写入失败验证（best-effort）
-    - 对应命令：`npm run stage5:hardening`
-  - 改进异常错误提示映射：`electron/main.ts`
-    - 文件占用错误返回明确重试指引
-    - 备份缺失回滚返回明确错误信息
-  - 完成 preload API 稳定性修复：
-    - `electron/main.ts` 调整窗口 preload 运行配置
-    - `src/App.tsx` 增加 API 安全访问封装，避免 `window.shellManager` 空值崩溃
-    - `src/types/global.d.ts` 将 `shellManager` 声明为可选类型
-  - 完成解析器与校验器语义升级：
-    - `src/core/parser.ts` 支持真实 nss 常见语法（空格分隔属性、复杂表达式、未知块/声明容错）
-    - `src/core/types.ts`、`src/core/serializer.ts` 增加 `raw` 节点与扩展 import 结构支持
-    - `src/core/validator.ts` 从 MVP 枚举校验升级为官方语义友好校验
-  - 完成真实配置回归脚本与样例集：
-    - 新增 `scripts/res-parse-check.ts`
-    - 新增命令 `npm run res:parse-check`
-    - 回归样例目录：`res/*.nss`
-    - 结果：`9/9` 文件解析通过，校验问题 `0`
-  - 完成“实时预览（所见即所得 v1）”：
-    - 新增运行时预览引擎：`src/preview/runtime-preview.ts`
-    - 预览支持场景切换（桌面/文件/文件夹/磁盘/空白处/任务栏）
-    - 预览支持 `type/mode/where/vis/find` 条件过滤与 `modify/remove` 规则命中模拟
-    - 预览同时展示“系统/第三方菜单模拟”与“Shell.nss 渲染菜单”
-    - 新增预览 smoke：`scripts/preview-smoke.ts`（`npm run preview:smoke`）
-  - 完成预览一致性增强（v1.1）：
-    - 预览递归解析 `import` 引用文件并合并节点渲染
-    - 输出改为“系统/三方 + shell”合并后的最终菜单预览（单栏）
-    - 读取 import 文件时禁用缺失文件自动创建，避免预览副作用
-    - 增加来源标签与场景引导：明确区分系统/三方与 shell.nss，且在“当前上下文未命中 shell”时给出可执行提示
-  - 完成真实系统渲染链路重构（禁止 mock 数据）：
-    - 渲染层移除 mock 回退，仅读取 preload 真实 API。
-    - 新增系统菜单快照 IPC：`system-menu:get-snapshot`。
-    - 新增注册表读取链路（`shell/shellex/CommandStore`）：`electron/system-menu-registry.ts`。
-    - 新增 COM 运行时菜单探测（含子菜单层级）：`electron/scripts/context-menu-probe.ps1`。
-    - 预览合并逻辑支持系统树形菜单注入与去重，改进与实机一致性。
-  - 完成桌面右键菜单第一轮差异收敛（基于 `res/desktop.png`）：
-    - 对齐核心主项：`View / Sort by / Refresh / Paste / Terminal / File manage / Go To / NVIDIA / New / Display settings / Personalize`。
-    - 对齐关键分组与分隔线位置（系统项 + shell.nss 合并渲染）。
-    - 去除实机未展示的噪音项（如 Spotlight/Properties 等场景不一致项）。
-- 下一阶段（阶段 6）应完成工作：
-  - 继续按真实截图和实机结果做差异收敛（每轮迭代输出“差异清单”）。
-  - 强化 `View/Sort by/New` 等子菜单层级与状态一致性。
-  - 扩展 `CommandStore` + COM 覆盖范围，减少遗漏系统项。
-  - 固化自动化对比脚本输出，作为版本回归基线。
-
-### 阶段 6：真实菜单一致性收敛
-
-- 当前状态：`In Progress`
-- 已完成工作（第一至第七轮）：
-  - 完成 COM 菜单探测增强：增加 `disabled` 状态输出，子菜单递归深度由 1 层提升到 2 层：
-    - `electron/scripts/context-menu-probe.ps1`
-  - 完成系统菜单多源合并策略升级：从“同名去重”升级为“同名合并 + 子菜单合并（优先更高质量来源）”：
-    - `electron/system-menu-registry.ts`
-  - 完成 `shell` 注册表 `SubCommands` 回溯解析，自动补齐 `CommandStore` 子菜单项，降低遗漏：
-    - `electron/system-menu-registry.ts`
-  - 完成系统快照 `disabled` 状态全链路透传（IPC -> 预览引擎 -> UI）并在快照区可视化标记：
-    - `src/shared/ipc.ts`
-    - `src/preview/runtime-preview.ts`
-    - `src/App.tsx`
-    - `src/App.css`
-    - `src/i18n.ts`
-  - 新增阶段 6 差异对比脚本与基线：
-    - 脚本：`scripts/stage6-diff.ts`（命令：`npm run stage6:diff`）
-    - 桌面基线：`docs/Stage6_Desktop_Baseline.json`
-    - 文件基线：`docs/Stage6_File_Baseline.json`
-    - 文件夹基线：`docs/Stage6_Dir_Baseline.json`
-    - 空白处基线：`docs/Stage6_Back_Baseline.json`
-    - 磁盘基线：`docs/Stage6_Drive_Baseline.json`
-    - 任务栏基线：`docs/Stage6_Taskbar_Baseline.json`
-    - 差异清单文档：`docs/Stage6_Diff_Checklist.md`
-    - 首轮输出：`missing=3`、`extra=3`、`order-mismatch=7`、`submenu-mismatch=0`
-    - 第二轮输出：`missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`（`mode=combined`）
-    - 第三轮输出（`npm run stage6:matrix`）：`desktop/file/dir/back` 四场景均为 `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
-    - 第四轮输出（`npm run stage6:matrix`）：新增 `drive/taskbar` 后 6 场景均为 `missing=0`、`extra=0`、`order-mismatch=0`、`submenu-mismatch=0`
-  - 补充预览回归用例，验证系统菜单禁用态与子菜单透传：
-    - `scripts/preview-smoke.ts`
-  - 完成阶段 6 第二轮对比口径与排序收敛：
-    - `stage6-diff` 升级为 combined 对比（系统快照 + `res/shell.nss` + imports）。
-    - 基线支持 `optional` 环境项，避免第三方插件菜单造成噪音差异。
-    - 系统快照新增桌面顺序归一（`View/Sort by/Refresh/Paste/...`）以提升稳定性。
-  - 完成阶段 6 第三、四轮多场景收敛：
-    - `stage6-diff` 支持 `optionalPatterns/ignoredPatterns`，适配多语言与插件差异。
-    - 新增多场景批量回归脚本：`scripts/stage6-matrix.ts`（命令：`npm run stage6:matrix`）。
-    - 多场景覆盖从 4 场景扩展到 6 场景（新增 `drive/taskbar` 基线）。
-  - 完成阶段 6 第五轮对齐增强：
-    - `stage6-diff` 增加 `disabled-mismatch` 维度，并纳入 `stage6-matrix` 通过判定。
-    - `electron/system-menu-registry.ts` 增加 `desktop/back` 场景的来源过滤与回退策略，降低注册表噪音项干扰。
-    - `src/App.tsx` 在刷新系统快照后自动同步 `clipboardHasContent`（根据 `Paste.disabled` 推断），缩小禁用态偏差。
-  - 完成阶段 6 第六轮“截图自动对比 + 自动策略 + 回归门禁”MVP：
-    - 新增截图提取脚本：`scripts/stage6-visual-extract.ts`。
-    - 新增视觉差异脚本：`scripts/stage6-visual-diff.ts`。
-    - 新增自动策略脚本：`scripts/stage6-autoplan.ts`。
-    - 新增一键回归脚本：`scripts/stage6-regress.ts`。
-    - 对 `res/desktop.png` 验证结果：视觉维度 `missing/extra/order/submenu/disabled` 全 0。
-  - 完成阶段 6 第七轮视觉提取增强：
-    - `scripts/stage6-visual-lib.ts` 从文本 OCR 解析升级为“文本 + 像素启发式”混合提取（submenu/disabled/separator）。
-    - 保持 `stage6:visual-diff` 与 `stage6:regress` 通过，作为当前默认视觉回归链路。
-  - 完成阶段 6 第八轮第一阶段“实机自动截图器”：
-    - 新增实机截图脚本：`electron/scripts/context-menu-capture.ps1`（Win32 自动右键 + `#32768` 菜单窗口定位 + 区域截图）。
-    - 新增截图 CLI 包装：`scripts/stage6-real-capture.ts`。
-    - 已完成可执行验证：
-      - `npx tsx scripts/stage6-real-capture.ts --dry-run`
-      - `npx tsx scripts/stage6-real-capture.ts --out artifacts/stage6/desktop-live.png --timeout-ms 4000`
-      - 输出示例：`menu=368x495`，截图已落盘到 `artifacts/stage6/desktop-live.png`。
-  - 完成阶段 6 第八轮第二阶段“一键实机截图回归”：
-    - 新增编排脚本：`scripts/stage6-real-regress.ts`。
-    - 新增 npm 命令：
-      - `npm run stage6:real-capture`
-      - `npm run stage6:real-regress`
-    - 实机触发策略增强：
-      - `context-menu-capture.ps1` 新增 `TriggerMode`（`auto/right-click/keyboard`）。
-      - `FocusDesktop` 使用 `Win + D` 聚焦桌面，降低窗口切换干扰。
-      - 默认采样点调整到屏幕右侧空白区，降低桌面图标 OCR 噪声。
-    - 回归门禁策略：
-      - 默认执行：`capture + stage6-visual-diff(--json) + stage6-autoplan`。
-      - 可选 `--full` 执行全链路 `stage6:regress`。
-      - 支持阈值参数：`--max-missing/--max-extra/--max-order/--max-submenu/--max-disabled`。
-    - 已完成实机验证：
-      - 严格模式：`npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen ...`（按预期失败并输出差异明细）。
-      - 阈值模式：`npm run stage6:real-regress -- --trigger-mode keyboard --capture-mode screen --max-missing 2 --max-extra 1 --max-order 4 ...`（通过）。
-      - 工程检查：`npm run lint`、`npm run typecheck` 通过。
-  - 完成阶段 6 第八轮第三阶段“实机截图截断修复”：
-    - `context-menu-capture.ps1` 增加 `PrintWindow` 菜单窗口捕获，并在 `screen` 模式下执行菜单回贴，避免 GDI 全屏抓取丢失菜单层。
-    - `menu` 模式将窗口捕获画布扩展到屏幕高度级别，解决底部固定项（`Display settings`、`Personalize`）截断。
-    - `stage6-real-capture.ts`、`stage6-real-regress.ts` 默认 `capture-mode` 调整为 `menu`。
-    - 已完成实机验证：
-      - `npm run stage6:real-capture -- --capture-mode menu --trigger-mode right-click`：OCR 可提取 `Display settings`、`Personalize`。
-      - `npm run stage6:real-regress -- --capture-mode menu --trigger-mode right-click --max-missing 0 --max-extra 99 --max-order 99 --max-disabled 99 ...`：`missing=0`，固定菜单项通过。
-  - 完成阶段 6 第八轮第四阶段“实机顺序与分组收敛”：
-    - 桌面排序锚点调整为实机顺序：`Refresh -> Terminal/File manage/Go To -> Paste -> 扩展项 -> NVIDIA -> New -> Display settings/Personalize`。
-    - `docs/Stage6_Desktop_Baseline.json` 同步更新顺序，并加入动态项/截断项容错（`Undo Delete`、`Open Folder as IntelliJ*`、`Open Folder as WebSt*`）。
-    - `scripts/stage6-visual-diff.ts` 调整禁用态比对策略，仅对 `predicted.disabled=true` 项做严格校验，降低 OCR 误报噪声。
-    - 已完成回归验证：
-      - `npm run stage6:real-regress -- --trigger-mode right-click --capture-mode menu --max-missing 0 --max-extra 0 --max-order 0 --max-submenu 0 --max-disabled 0 ...`：`missing=0`、`extra=0`、`order=0`、`submenu=0`、`disabled=0`。
-      - `npm run stage6:matrix`：`OK`。
-- 下一轮应完成工作：
-  - 将视觉对比从单图扩展到多场景批处理（desktop/file/dir/back），输出聚合报告。
-  - 补充视觉基线与误差阈值文档（包含 OCR 质量下限与失败处理策略）。
-  - 持续扩展 `CommandStore` 模板与 COM 采样深度（重点子菜单层级与禁用态一致性）。
-  - 将 `stage6:regress` 纳入发布前固定回归清单（与 smoke/test 报告联动）。
-
-## 3. 本轮工作总结（2026-02-08）
-
-1. 解析器与校验器能力升级到真实配置可用级别，并通过 `res/*.nss` 批量验证。
-2. UI 功能闭环完善：文件选择读取、Diff、备份回滚、应用配置、i18n（中英文）。
-3. 预览引擎从“模拟为主”升级到“真实系统配置读取 + shell 规则合并”。
-4. 系统菜单真实数据源已接入：
-   - 注册表：`shell/shellex/CommandStore`
-   - COM 运行时探测：`IContextMenu` 系列（含子菜单）
-5. 已执行并落实强制规范：禁止 mock 数据用于渲染结果；真实数据读取失败时只显示错误/空态，不回退静态 mock 菜单。
-6. 已建立阶段对比方式：每阶段开发完成后，基于 `res/desktop.png` 与当前渲染结果进行差异分析并记录。
-7. 已启动阶段 6 并完成第一轮能力增强：COM 禁用态透传、子菜单深度增强、`SubCommands` 回溯与多源合并升级。
-8. 已建立阶段 6 可复现差异脚本与基线：`npm run stage6:diff` + `docs/Stage6_Desktop_Baseline.json`。
-9. 已将系统快照禁用态接入 UI 与运行时预览，支持状态一致性对照。
-10. 已新增视觉对比链路：`stage6:visual-extract`、`stage6:visual-diff`、`stage6:autoplan`。
-11. 已新增阶段 6 一键回归门禁：`stage6:regress`（结构差异 + 视觉差异 + smoke + typecheck + lint）。
-12. 已完成视觉提取第二版（文本 + 像素混合启发式），并验证 `res/desktop.png` 对比结果稳定为 0 差异。
+1. 开发计划：`docs/Develop_Plan.md`
+2. 阶段 6 差异清单：`docs/Stage6_Diff_Checklist.md`
+3. 阶段 6 基线：`docs/Stage6_*_Baseline.json`
+4. 阶段 5 测试资料：`docs/Stage5_Test_Cases.md`、`docs/Stage5_Test_Report.md`、`docs/Stage5_Manual_Test_Record.md`
