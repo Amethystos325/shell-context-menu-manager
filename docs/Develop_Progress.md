@@ -286,7 +286,7 @@
       - `npm run stage6:real-regress`
     - 实机触发策略增强：
       - `context-menu-capture.ps1` 新增 `TriggerMode`（`auto/right-click/keyboard`）。
-      - `FocusDesktop` 从 `Win + D` 调整为 `Win + M`，降低窗口切换干扰。
+      - `FocusDesktop` 使用 `Win + D` 聚焦桌面，降低窗口切换干扰。
       - 默认采样点调整到屏幕右侧空白区，降低桌面图标 OCR 噪声。
     - 回归门禁策略：
       - 默认执行：`capture + stage6-visual-diff(--json) + stage6-autoplan`。
@@ -303,6 +303,13 @@
     - 已完成实机验证：
       - `npm run stage6:real-capture -- --capture-mode menu --trigger-mode right-click`：OCR 可提取 `Display settings`、`Personalize`。
       - `npm run stage6:real-regress -- --capture-mode menu --trigger-mode right-click --max-missing 0 --max-extra 99 --max-order 99 --max-disabled 99 ...`：`missing=0`，固定菜单项通过。
+  - 完成阶段 6 第八轮第四阶段“实机顺序与分组收敛”：
+    - 桌面排序锚点调整为实机顺序：`Refresh -> Terminal/File manage/Go To -> Paste -> 扩展项 -> NVIDIA -> New -> Display settings/Personalize`。
+    - `docs/Stage6_Desktop_Baseline.json` 同步更新顺序，并加入动态项/截断项容错（`Undo Delete`、`Open Folder as IntelliJ*`、`Open Folder as WebSt*`）。
+    - `scripts/stage6-visual-diff.ts` 调整禁用态比对策略，仅对 `predicted.disabled=true` 项做严格校验，降低 OCR 误报噪声。
+    - 已完成回归验证：
+      - `npm run stage6:real-regress -- --trigger-mode right-click --capture-mode menu --max-missing 0 --max-extra 0 --max-order 0 --max-submenu 0 --max-disabled 0 ...`：`missing=0`、`extra=0`、`order=0`、`submenu=0`、`disabled=0`。
+      - `npm run stage6:matrix`：`OK`。
 - 下一轮应完成工作：
   - 将视觉对比从单图扩展到多场景批处理（desktop/file/dir/back），输出聚合报告。
   - 补充视觉基线与误差阈值文档（包含 OCR 质量下限与失败处理策略）。

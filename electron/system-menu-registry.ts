@@ -97,14 +97,36 @@ const DESKTOP_ORDER_HINTS: Record<string, number> = {
   view: 10,
   "sort by": 20,
   refresh: 30,
+  terminal: 100,
+  "file manage": 110,
+  "go to": 120,
+  paste: 200,
+  "open with code": 220,
+  "open git bash here": 230,
+  "open folder as intellij idea community edition project": 240,
+  "open folder as webstorm project": 250,
+  "nvidia app": 340,
+  "nvidia control panel": 350,
+  new: 450,
+  "display settings": 460,
+  personalize: 470,
+};
+
+const BACKGROUND_ORDER_HINTS: Record<string, number> = {
+  view: 10,
+  "sort by": 20,
+  "group by": 25,
+  refresh: 30,
   paste: 100,
   "open with code": 120,
   "open git bash here": 130,
   "open folder as intellij idea community edition project": 140,
   "open folder as webstorm project": 150,
   terminal: 240,
+  "open in terminal": 245,
   "file manage": 250,
   "go to": 260,
+  properties: 160,
   "nvidia app": 340,
   "nvidia control panel": 350,
   new: 450,
@@ -453,21 +475,30 @@ function collectTopLevelTitleKeys(entries: SystemMenuEntry[]): Set<string> {
   return keys;
 }
 
-function getDesktopOrderHint(title: string, fallbackIndex: number): number {
+function getDesktopOrderHint(
+  title: string,
+  fallbackIndex: number,
+  locationType: PreviewLocationType,
+): number {
   const normalized = normalizeEntryKey(title);
-  const hint = DESKTOP_ORDER_HINTS[normalized];
+  const desktopLikeHints =
+    locationType === "desktop" ? DESKTOP_ORDER_HINTS : BACKGROUND_ORDER_HINTS;
+  const hint = desktopLikeHints[normalized];
   if (hint !== undefined) {
     return hint;
   }
   return 200 + fallbackIndex;
 }
 
-function sortDesktopEntries(entries: SystemMenuEntry[]): SystemMenuEntry[] {
+function sortDesktopEntries(
+  entries: SystemMenuEntry[],
+  locationType: PreviewLocationType,
+): SystemMenuEntry[] {
   return entries
     .map((entry, index) => ({
       entry,
       index,
-      hint: getDesktopOrderHint(entry.title, index),
+      hint: getDesktopOrderHint(entry.title, index, locationType),
     }))
     .sort((a, b) => (a.hint === b.hint ? a.index - b.index : a.hint - b.hint))
     .map((item) => item.entry);
@@ -1093,7 +1124,7 @@ export async function readSystemMenuSnapshot(
   }
   const ordered =
     locationType === "desktop" || locationType === "back"
-      ? sortDesktopEntries(normalized)
+      ? sortDesktopEntries(normalized, locationType)
       : normalized;
   return {
     locationType,

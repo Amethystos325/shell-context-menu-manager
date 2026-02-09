@@ -154,15 +154,37 @@ const DESKTOP_ORDER_HINTS: Record<string, number> = {
   view: 10,
   "sort by": 20,
   refresh: 30,
+  terminal: 100,
+  "file manage": 110,
+  "go to": 120,
+  paste: 200,
+  "undo copy": 210,
+  "open with code": 220,
+  "open git bash here": 230,
+  "open folder as intellij idea community edition project": 240,
+  "open folder as webstorm project": 250,
+  "nvidia app": 340,
+  "nvidia control panel": 350,
+  new: 450,
+  "display settings": 460,
+  personalize: 470,
+};
+
+const BACKGROUND_ORDER_HINTS: Record<string, number> = {
+  view: 10,
+  "sort by": 20,
+  "group by": 25,
+  refresh: 30,
   paste: 100,
-  "undo copy": 110,
   "open with code": 120,
   "open git bash here": 130,
   "open folder as intellij idea community edition project": 140,
   "open folder as webstorm project": 150,
   terminal: 240,
+  "open in terminal": 245,
   "file manage": 250,
   "go to": 260,
+  properties: 160,
   "nvidia app": 340,
   "nvidia control panel": 350,
   new: 450,
@@ -1109,7 +1131,9 @@ function getSystemOrderHint(
 ): number {
   const normalized = normalizeToken(title);
   if (context.locationType === "desktop" || context.locationType === "back") {
-    const mapped = DESKTOP_ORDER_HINTS[normalized];
+    const desktopLikeHints =
+      context.locationType === "desktop" ? DESKTOP_ORDER_HINTS : BACKGROUND_ORDER_HINTS;
+    const mapped = desktopLikeHints[normalized];
     if (mapped !== undefined) {
       return mapped;
     }
@@ -1131,7 +1155,9 @@ function computeShellTopLevelHint(
   }
 
   const shellTitle = titleOfNode(node);
-  const titleHint = DESKTOP_ORDER_HINTS[normalizeToken(shellTitle)];
+  const desktopLikeHints =
+    context.locationType === "desktop" ? DESKTOP_ORDER_HINTS : BACKGROUND_ORDER_HINTS;
+  const titleHint = desktopLikeHints[normalizeToken(shellTitle)];
   if (isDesktopLike && titleHint !== undefined) {
     return titleHint + orderBias;
   }

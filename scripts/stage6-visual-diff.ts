@@ -181,7 +181,7 @@ function toTopLevelPreview(entries: RuntimePreviewEntry[]): BaselineEntry[] {
     .map((entry) => ({
       title: entry.title.trim(),
       submenu: entry.kind === "menu" || Boolean(entry.submenu),
-      disabled: Boolean(entry.disabled),
+      disabled: entry.disabled ? true : undefined,
     }))
     .filter((entry) => entry.title.length > 0);
 }

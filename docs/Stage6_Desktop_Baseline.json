@@ -8,10 +8,10 @@
     { "title": "View", "submenu": true },
     { "title": "Sort by", "submenu": true },
     { "title": "Refresh", "submenu": false },
-    { "title": "Paste", "submenu": false },
     { "title": "Terminal", "submenu": true },
     { "title": "File manage", "submenu": true },
     { "title": "Go To", "submenu": true },
+    { "title": "Paste", "submenu": false },
     { "title": "NVIDIA App", "submenu": false },
     { "title": "NVIDIA Control Panel", "submenu": false },
     { "title": "New", "submenu": true },
@@ -19,9 +19,14 @@
     { "title": "Personalize", "submenu": false }
   ],
   "optional": [
+    { "title": "Undo Delete" },
     { "title": "Open with Code" },
     { "title": "Open Git Bash here" },
     { "title": "Open Folder as IntelliJ IDEA Community Edition Project" },
     { "title": "Open Folder as WebStorm Project" }
+  ],
+  "optionalPatterns": [
+    "^Open Folder as IntelliJ",
+    "^Open Folder as WebSt"
   ]
 }
